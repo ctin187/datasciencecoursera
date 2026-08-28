@@ -5,7 +5,15 @@ import type { Position } from '../../types';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
-import { estimateSnapTrend, faabSpentByRoster, rosteredPlayerIds, suggestFaabBid } from '../../lib/waiverOptimizer';
+import {
+  benchPlayerIds,
+  estimateSnapTrend,
+  faabSpentByRoster,
+  rosteredPlayerIds,
+  suggestDropCandidates,
+  suggestFaabBid,
+} from '../../lib/waiverOptimizer';
+import type { DropCandidate } from '../../types';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
 
@@ -22,14 +30,18 @@ interface WaiverRow {
   suggestedBid: number;
   priority: string;
   reason: string;
+  dropCandidates: DropCandidate[];
 }
 
-export function WaiversTab({ data, derived }: { data: LeagueData; derived: Derived }) {
+export function WaiversTab({ data, derived, userId }: { data: LeagueData; derived: Derived; userId: string }) {
   const [posFilter, setPosFilter] = useState<Position | 'ALL'>('ALL');
   const startingBudget = data.league.settings.waiver_budget ?? 100;
 
   const rostered = useMemo(() => rosteredPlayerIds(data.rosters), [data.rosters]);
   const spentByRoster = useMemo(() => faabSpentByRoster(data.rosters), [data.rosters]);
+
+  const myRoster = userId ? data.rosters.find((r) => r.owner_id === userId) : undefined;
+  const myBench = useMemo(() => (myRoster ? benchPlayerIds(myRoster) : []), [myRoster]);
 
   const freeAgents = useMemo(() => {
     return Object.values(data.players).filter((p) => {
@@ -47,6 +59,16 @@ export function WaiversTab({ data, derived }: { data: LeagueData; derived: Deriv
         const trend = estimateSnapTrend(p);
         const tv = derived.tradeValueMap.get(p.player_id);
         const suggestion = suggestFaabBid(p, trend, tv, { startingBudget, spentByRoster });
+        const dropCandidates = myRoster
+          ? suggestDropCandidates(
+              myBench,
+              data.players,
+              derived.tradeValueMap,
+              p.position as Position,
+              data.league.roster_positions,
+              1,
+            )
+          : [];
         return {
           playerId: p.player_id,
           name: p.full_name || `${p.first_name} ${p.last_name}`,
@@ -60,11 +82,12 @@ export function WaiversTab({ data, derived }: { data: LeagueData; derived: Deriv
           suggestedBid: suggestion.suggestedBid,
           priority: suggestion.priority,
           reason: suggestion.reason,
+          dropCandidates,
         };
       })
       .sort((a, b) => b.opportunityScore - a.opportunityScore)
       .slice(0, 150);
-  }, [freeAgents, derived.tradeValueMap, startingBudget, spentByRoster]);
+  }, [freeAgents, derived.tradeValueMap, startingBudget, spentByRoster, myRoster, myBench, data.players, data.league.roster_positions]);
 
   const filteredRows = posFilter === 'ALL' ? rows : rows.filter((r) => r.position === posFilter);
 
@@ -94,6 +117,22 @@ export function WaiversTab({ data, derived }: { data: LeagueData; derived: Deriv
         </Badge>
       ),
     },
+    {
+      key: 'dropCandidate',
+      header: 'Suggested Drop',
+      accessor: (r) => r.dropCandidates[0]?.name ?? '',
+      sortable: false,
+      render: (r) => {
+        if (!userId) return <span className="text-slate-600">enter User ID</span>;
+        const top = r.dropCandidates[0];
+        if (!top) return <span className="text-slate-600">no matching bench spot</span>;
+        return (
+          <span title={top.reason} className="cursor-help text-amber-300">
+            {top.name} <span className="text-slate-500">({top.position})</span>
+          </span>
+        );
+      },
+    },
   ];
 
   const totalBudgetRemaining = Array.from(spentByRoster.values()).reduce((s, spent) => s + (startingBudget - spent), 0);
@@ -114,7 +153,15 @@ export function WaiversTab({ data, derived }: { data: LeagueData; derived: Deriv
       </Card>
 
       <Card>
-        <CardTitle>Waiver Wire Optimizer</CardTitle>
+        <CardTitle
+          subtitle={
+            userId
+              ? "\"Suggested Drop\" is the weakest matching bench player on your roster — same position, or FLEX-eligible positions if your league has a FLEX spot. Hover a suggestion for why."
+              : 'Enter your Sleeper User ID above and reload to get personalized "who to drop" suggestions alongside each pickup.'
+          }
+        >
+          Waiver Wire Optimizer
+        </CardTitle>
         <div className="mb-3 flex flex-wrap gap-1.5">
           {(['ALL', 'QB', 'RB', 'WR', 'TE'] as const).map((p) => (
             <button
