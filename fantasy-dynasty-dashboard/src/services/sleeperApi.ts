@@ -98,6 +98,21 @@ export const LeagueService = {
     );
   },
 
+  /** Bypasses the roster TTL cache - used by the "refresh rosters" action so trade analysis reflects the current state. */
+  async getRostersLive(leagueId: string) {
+    try {
+      const res = await throttledFetch(`${BASE}/league/${leagueId}/rosters`);
+      if (!res.ok) throw new SleeperApiError(`Sleeper API error (${res.status})`, res.status);
+      const data = (await res.json()) as SleeperRoster[];
+      setCached(`rosters:${leagueId}`, data);
+      return { data, stale: false };
+    } catch {
+      const stale = getStale<SleeperRoster[]>(`rosters:${leagueId}`);
+      if (stale) return { data: stale.data, stale: true, staleAt: stale.timestamp };
+      throw new SleeperApiError('Network error reaching Sleeper API. Please try again.');
+    }
+  },
+
   async getUsers(leagueId: string) {
     return getJsonWithMeta<SleeperUser[]>(`/league/${leagueId}/users`, `users:${leagueId}`, TTL.USERS);
   },
@@ -116,6 +131,26 @@ export const LeagueService = {
       `draftpicks:${draftId}`,
       TTL.DRAFTS,
     );
+  },
+
+  /**
+   * Same endpoint as getDraftPicks, but always hits the network - used by the
+   * live-draft poller, where picks must never be served from the TTL cache.
+   * Still writes the cache on success so a mid-draft network blip falls back
+   * to the last-known picks instead of erroring out.
+   */
+  async getDraftPicksLive(draftId: string) {
+    try {
+      const res = await throttledFetch(`${BASE}/draft/${draftId}/picks`);
+      if (!res.ok) throw new SleeperApiError(`Sleeper API error (${res.status})`, res.status);
+      const data = (await res.json()) as SleeperDraftPick[];
+      setCached(`draftpicks:${draftId}`, data);
+      return { data, stale: false };
+    } catch {
+      const stale = getStale<SleeperDraftPick[]>(`draftpicks:${draftId}`);
+      if (stale) return { data: stale.data, stale: true, staleAt: stale.timestamp };
+      throw new SleeperApiError('Network error reaching Sleeper API. Please try again.');
+    }
   },
 
   async getTransactions(leagueId: string, week: number) {

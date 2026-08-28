@@ -1,9 +1,12 @@
 import type {
+  LetterGrade,
   LifecyclePhase,
   Position,
   PlayersMap,
   RosterAnalysis,
   SleeperRoster,
+  TeamGrade,
+  ThreeDValue,
   TradeValueEntry,
 } from '../types';
 import { retirementRisk } from './agingCurves';
@@ -116,4 +119,210 @@ export function futureRosterProjection(
     });
     return { position, startableCount: stillStartable.length };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Multi-factor team grading (0-100 + letter grade)
+//
+// The lifecycle `phase` above is a coarse 4-bucket classification and, with
+// thresholds tuned around the curated trade-value seed dataset, most real
+// rosters in a league end up defaulting to 'middle' - they simply don't
+// clear the eliteAgingCount>=3 / youngAssetCount>=5 bars in either
+// direction, so most teams look the same. This is a genuinely continuous,
+// weighted score built from five independent signals so teams actually
+// differentiate, plus a human-readable `breakdown` so a grade is never a
+// black box.
+// ---------------------------------------------------------------------------
+
+/** "Solid Starter" tier floor (see lib/consensusData.ts tierForValue) used as the bar for "quality" depth. */
+const QUALITY_STARTER_VALUE = 1500;
+
+export interface LeagueGradeContext {
+  avgAgeByPosition: Record<Position, number>;
+  avgProjectedPoints: number;
+}
+
+function clamp0to100(n: number): number {
+  return Math.max(0, Math.min(100, n));
+}
+
+export function letterForScore(score: number): LetterGrade {
+  if (score >= 90) return 'A';
+  if (score >= 80) return 'B';
+  if (score >= 70) return 'C';
+  if (score >= 60) return 'D';
+  return 'F';
+}
+
+/** League-wide baselines every team's grade is measured against - avg age by position, avg starter projected points. */
+export function computeLeagueGradeContext(
+  rosters: SleeperRoster[],
+  players: PlayersMap,
+  threeDValues: Map<string, ThreeDValue>,
+): LeagueGradeContext {
+  const ageSums: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+  const ageCounts: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+  let totalProjected = 0;
+
+  for (const roster of rosters) {
+    const starterSet = new Set((roster.starters ?? []).filter((id) => id !== '0'));
+    let rosterProjected = 0;
+    for (const id of roster.players ?? []) {
+      const p = players[id];
+      if (!p) continue;
+      const pos = SKILL_POSITIONS.includes(p.position as Position) ? (p.position as Position) : null;
+      if (pos && p.age) {
+        ageSums[pos] += p.age;
+        ageCounts[pos] += 1;
+      }
+      if (starterSet.has(id)) {
+        rosterProjected += threeDValues.get(id)?.currentProjection ?? 0;
+      }
+    }
+    totalProjected += rosterProjected;
+  }
+
+  const avgAgeByPosition = {} as Record<Position, number>;
+  (Object.keys(ageSums) as Position[]).forEach((pos) => {
+    avgAgeByPosition[pos] = ageCounts[pos] ? ageSums[pos] / ageCounts[pos] : 0;
+  });
+
+  return {
+    avgAgeByPosition,
+    avgProjectedPoints: rosters.length ? totalProjected / rosters.length : 0,
+  };
+}
+
+export function gradeRoster(
+  roster: SleeperRoster,
+  ownerName: string,
+  players: PlayersMap,
+  tradeValues: Map<string, TradeValueEntry>,
+  threeDValues: Map<string, ThreeDValue>,
+  context: LeagueGradeContext,
+): TeamGrade {
+  const starterSet = new Set((roster.starters ?? []).filter((id) => id !== '0'));
+  const positionalAges: Record<Position, number[]> = { QB: [], RB: [], WR: [], TE: [], K: [], DEF: [] };
+  const qualityCountByPos: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+
+  let eliteAgingCount = 0;
+  let youngAssetCount = 0;
+  let middleZoneCount = 0;
+  let injuryRiskPoints = 0;
+  let starterProjected = 0;
+
+  for (const id of roster.players ?? []) {
+    const p = players[id];
+    if (!p) continue;
+    const pos = SKILL_POSITIONS.includes(p.position as Position) ? (p.position as Position) : null;
+    const tv = tradeValues.get(id);
+
+    if (pos && p.age) {
+      positionalAges[pos].push(p.age);
+      if (tv && tv.consensusValue >= 6000 && p.age >= 28) eliteAgingCount++;
+      if (tv && tv.consensusValue >= 1500 && p.age <= 25) youngAssetCount++;
+      if (p.age >= 26 && p.age <= 27) middleZoneCount++;
+      if (p.age >= 30) injuryRiskPoints += 5;
+    }
+    // Sleeper's public data has no injury-history field - injury_status reflects
+    // this week's report only, used here as the best available risk proxy.
+    if (p.injury_status) injuryRiskPoints += 3;
+    if (pos) qualityCountByPos[pos] += (tv?.consensusValue ?? 0) >= QUALITY_STARTER_VALUE ? 1 : 0;
+
+    if (starterSet.has(id)) {
+      starterProjected += threeDValues.get(id)?.currentProjection ?? 0;
+    }
+  }
+
+  const breakdown: string[] = [];
+
+  // A. Contention phase (25%) - rewards a clear win-now OR rebuild core, penalizes a
+  // roster stacked with 26-27yo players (too old to be a rebuild core, not yet the
+  // proven aging stars that define a win-now core).
+  const winNowStrength = Math.min(40, eliteAgingCount * 15);
+  const rebuildStrength = Math.min(40, youngAssetCount * 8);
+  const stuckPenalty = Math.min(40, middleZoneCount * 6);
+  const contentionScore = clamp0to100(20 + Math.max(winNowStrength, rebuildStrength) - stuckPenalty * 0.5);
+  breakdown.push(
+    `Contention phase: 20 + max(win-now ${winNowStrength}, rebuild ${rebuildStrength}) - stuck-penalty ${(stuckPenalty * 0.5).toFixed(1)} = ${contentionScore.toFixed(1)}`,
+  );
+
+  // B. Age curve alignment (20%) - baseline 70 so a young roster can earn a bonus above it.
+  let ageCurveScore = 70;
+  for (const pos of SKILL_POSITIONS) {
+    const ages = positionalAges[pos];
+    if (ages.length === 0) continue;
+    const avg = ages.reduce((s, a) => s + a, 0) / ages.length;
+    const diff = avg - context.avgAgeByPosition[pos];
+    if (diff > 3) ageCurveScore -= 10;
+    else if (diff < -3) ageCurveScore += 10;
+  }
+  ageCurveScore = clamp0to100(ageCurveScore);
+  breakdown.push(`Age curve alignment: baseline 70, ±10 per position vs. league avg age = ${ageCurveScore.toFixed(1)}`);
+
+  // C. Positional depth (25%) - 0 quality players at a position = 0, 1 = 40, 2+ = 80-100.
+  const depthComponents = SKILL_POSITIONS.map((pos) => Math.min(100, qualityCountByPos[pos] * 40));
+  const depthScore = clamp0to100(depthComponents.reduce((s, v) => s + v, 0) / depthComponents.length);
+  breakdown.push(
+    `Positional depth: QB ${qualityCountByPos.QB}, RB ${qualityCountByPos.RB}, WR ${qualityCountByPos.WR}, TE ${qualityCountByPos.TE} quality (Tier ≤4) players = ${depthScore.toFixed(1)}`,
+  );
+
+  // D. Injury risk (15%, inverted so higher = safer roster)
+  const injuryRiskScore = clamp0to100(100 - injuryRiskPoints);
+  breakdown.push(
+    `Injury risk: ${injuryRiskPoints} risk points (+5/player age 30+, +3/player on this week's injury report) -> safety ${injuryRiskScore.toFixed(1)}`,
+  );
+
+  // E. Projected points vs. league average (15%) - starters only, since that's what actually scores.
+  const projectedPointsScore =
+    context.avgProjectedPoints > 0
+      ? clamp0to100(50 + ((starterProjected - context.avgProjectedPoints) / context.avgProjectedPoints) * 100)
+      : 50;
+  breakdown.push(
+    `Projected points: starters project ${starterProjected.toFixed(0)} vs. league avg ${context.avgProjectedPoints.toFixed(0)} = ${projectedPointsScore.toFixed(1)}`,
+  );
+
+  const overall = clamp0to100(
+    contentionScore * 0.25 + ageCurveScore * 0.2 + depthScore * 0.25 + injuryRiskScore * 0.15 + projectedPointsScore * 0.15,
+  );
+  breakdown.push(
+    `Overall = (${contentionScore.toFixed(1)}×0.25) + (${ageCurveScore.toFixed(1)}×0.20) + (${depthScore.toFixed(1)}×0.25) + (${injuryRiskScore.toFixed(1)}×0.15) + (${projectedPointsScore.toFixed(1)}×0.15) = ${overall.toFixed(1)} (${letterForScore(overall)})`,
+  );
+
+  const allAges = SKILL_POSITIONS.flatMap((p) => positionalAges[p]);
+  const avgAge = allAges.length ? allAges.reduce((s, a) => s + a, 0) / allAges.length : 0;
+
+  const winNowGrade = clamp0to100(eliteAgingCount * 20 + projectedPointsScore * 0.5 + (avgAge >= 26 ? 10 : 0));
+  const rebuildGrade = clamp0to100(youngAssetCount * 15 + injuryRiskScore * 0.2 + (avgAge <= 25 ? 15 : 0) + depthScore * 0.2);
+  const longevityScore = clamp0to100(ageCurveScore * 0.5 + rebuildGrade * 0.3 + depthScore * 0.2);
+
+  return {
+    rosterId: roster.roster_id,
+    ownerName,
+    contentionScore,
+    ageCurveScore,
+    depthScore,
+    injuryRiskScore,
+    projectedPointsScore,
+    overall,
+    letter: letterForScore(overall),
+    winNowGrade,
+    rebuildGrade,
+    longevityScore,
+    breakdown,
+  };
+}
+
+/** Grades every roster in the league against a shared context, sorted best-to-worst. */
+export function gradeLeague(
+  rosters: SleeperRoster[],
+  ownerNameFor: (rosterId: number) => string,
+  players: PlayersMap,
+  tradeValues: Map<string, TradeValueEntry>,
+  threeDValues: Map<string, ThreeDValue>,
+): TeamGrade[] {
+  const context = computeLeagueGradeContext(rosters, players, threeDValues);
+  return rosters
+    .map((r) => gradeRoster(r, ownerNameFor(r.roster_id), players, tradeValues, threeDValues, context))
+    .sort((a, b) => b.overall - a.overall);
 }
