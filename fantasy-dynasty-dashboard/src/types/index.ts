@@ -205,7 +205,17 @@ export interface RosterAnalysis {
   youngAssetCount: number; // <=24 startable players
   totalValue: number;
   positionalAges: Record<Position, number[]>;
+  positionalValues: Record<Position, number>; // summed consensus trade value per position
+  starterValue: number;
+  benchValue: number;
   retirementRisk: { playerId: string; risk: 'low' | 'medium' | 'high'; reason: string }[];
+}
+
+export interface DropCandidate {
+  playerId: string;
+  name: string;
+  position: Position;
+  reason: string;
 }
 
 export interface FaabSuggestion {

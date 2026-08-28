@@ -17,7 +17,9 @@ export function analyzeRoster(
   tradeValues: Map<string, TradeValueEntry>,
 ): RosterAnalysis {
   const playerIds = roster.players ?? [];
+  const starterSet = new Set(roster.starters ?? []);
   const positionalAges: Record<Position, number[]> = { QB: [], RB: [], WR: [], TE: [], K: [], DEF: [] };
+  const positionalValues: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
   const retirementRiskList: RosterAnalysis['retirementRisk'] = [];
 
   let ageSum = 0;
@@ -25,29 +27,29 @@ export function analyzeRoster(
   let eliteAgingCount = 0;
   let youngAssetCount = 0;
   let totalValue = 0;
+  let starterValue = 0;
+  let benchValue = 0;
 
   for (const id of playerIds) {
     const p = players[id];
-    if (!p || !p.age) continue;
+    if (!p) continue;
     const pos = (SKILL_POSITIONS.includes(p.position as Position) ? p.position : null) as Position | null;
-    if (!pos) continue;
+
+    const tv = tradeValues.get(id);
+    if (pos) positionalValues[pos] += tv?.consensusValue ?? 0;
+    totalValue += tv?.consensusValue ?? 0;
+    if (starterSet.has(id)) starterValue += tv?.consensusValue ?? 0;
+    else benchValue += tv?.consensusValue ?? 0;
+
+    if (!p.age || !pos) continue;
 
     positionalAges[pos].push(p.age);
     ageSum += p.age;
     ageCount++;
 
-    // Find this player's trade value entry, if we have one (by player_id match through seed data).
-    let tv: TradeValueEntry | undefined;
-    for (const entry of tradeValues.values()) {
-      if (entry.playerId === id) {
-        tv = entry;
-        break;
-      }
-    }
     const isElite = (tv?.consensusValue ?? 0) >= 6000;
     if (isElite && p.age >= 28) eliteAgingCount++;
     if ((tv?.consensusValue ?? 0) >= 1500 && p.age <= 24) youngAssetCount++;
-    totalValue += tv?.consensusValue ?? 0;
 
     const risk = retirementRisk(pos, p.age);
     if (risk.risk !== 'low') {
@@ -67,6 +69,9 @@ export function analyzeRoster(
     youngAssetCount,
     totalValue,
     positionalAges,
+    positionalValues,
+    starterValue,
+    benchValue,
     retirementRisk: retirementRiskList,
   };
 }

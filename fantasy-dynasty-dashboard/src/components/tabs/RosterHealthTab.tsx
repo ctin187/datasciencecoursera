@@ -3,8 +3,10 @@ import type { LeagueData } from '../../hooks/useLeagueData';
 import type { useDerivedData } from '../../hooks/useDerivedData';
 import type { Position } from '../../types';
 import { Card, CardTitle, StatTile } from '../ui/Card';
+import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
 import { analyzeRoster, futureRosterProjection, phaseDescription } from '../../lib/rosterAnalyzer';
+import { retirementRisk } from '../../lib/agingCurves';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
 
@@ -14,6 +16,19 @@ const PHASE_COLOR = {
   rebuild: 'green',
   middle: 'yellow',
 } as const;
+
+interface RosterPlayerRow {
+  playerId: string;
+  name: string;
+  position: Position;
+  age: number | null;
+  isStarter: boolean;
+  consensusValue: number;
+  tier: string;
+  currentProjection: number;
+  threeYearOutlook: number;
+  risk: 'low' | 'medium' | 'high';
+}
 
 export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; derived: Derived; userId: string }) {
   const userById = new Map(data.users.map((u) => [u.user_id, u]));
@@ -42,6 +57,59 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
       positions: futureRosterProjection(analysis.positionalAges, yearsOut),
     }));
   }, [analysis, data.league.season]);
+
+  const rosterRows: RosterPlayerRow[] = useMemo(() => {
+    if (!roster) return [];
+    const starterSet = new Set(roster.starters ?? []);
+    return (roster.players ?? [])
+      .map((id) => {
+        const p = data.players[id];
+        if (!p) return null;
+        const tv = derived.tradeValueMap.get(id);
+        const v = derived.threeDValues.get(id);
+        const risk = p.age ? retirementRisk(p.position, p.age).risk : 'low';
+        const row: RosterPlayerRow = {
+          playerId: id,
+          name: p.full_name || `${p.first_name} ${p.last_name}`,
+          position: (tv?.position ?? p.position) as Position,
+          age: p.age,
+          isStarter: starterSet.has(id),
+          consensusValue: tv?.consensusValue ?? 0,
+          tier: tv?.tier ?? '—',
+          currentProjection: v ? Math.round(v.currentProjection) : 0,
+          threeYearOutlook: v ? Math.round(v.threeYearOutlook) : 0,
+          risk,
+        };
+        return row;
+      })
+      .filter((r): r is RosterPlayerRow => r !== null);
+  }, [roster, data.players, derived.tradeValueMap, derived.threeDValues]);
+
+  const rosterColumns: Column<RosterPlayerRow>[] = [
+    { key: 'name', header: 'Player', accessor: (r) => r.name },
+    { key: 'position', header: 'Pos', accessor: (r) => r.position, align: 'center' },
+    { key: 'age', header: 'Age', accessor: (r) => r.age ?? 0, align: 'center', render: (r) => r.age ?? '—' },
+    {
+      key: 'isStarter',
+      header: 'Role',
+      accessor: (r) => (r.isStarter ? 1 : 0),
+      align: 'center',
+      render: (r) => <Badge color={r.isStarter ? 'green' : 'gray'}>{r.isStarter ? 'Starter' : 'Bench'}</Badge>,
+    },
+    { key: 'consensusValue', header: 'Trade Value', accessor: (r) => r.consensusValue, align: 'right' },
+    { key: 'tier', header: 'Tier', accessor: (r) => r.tier },
+    { key: 'currentProjection', header: 'Current Pts', accessor: (r) => r.currentProjection, align: 'right' },
+    { key: 'threeYearOutlook', header: '3-yr Avg', accessor: (r) => r.threeYearOutlook, align: 'right' },
+    {
+      key: 'risk',
+      header: 'Decline Risk',
+      accessor: (r) => r.risk,
+      align: 'center',
+      render: (r) => (
+        <Badge color={r.risk === 'high' ? 'red' : r.risk === 'medium' ? 'yellow' : 'gray'}>{r.risk.toUpperCase()}</Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -77,6 +145,35 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
               <StatTile label="Elite Aging (28+)" value={analysis.eliteAgingCount} />
               <StatTile label="Young Assets (≤24)" value={analysis.youngAssetCount} />
               <StatTile label="Total Dynasty Value" value={analysis.totalValue} />
+            </div>
+          </Card>
+
+          <Card>
+            <CardTitle subtitle="Every rostered player, ranked by dynasty trade value.">Full Roster — Team Deep Dive</CardTitle>
+            <DataTable rows={rosterRows} columns={rosterColumns} rowKey={(r) => r.playerId} defaultSortKey="consensusValue" />
+          </Card>
+
+          <Card>
+            <CardTitle subtitle="Where this team's value actually sits — a bench-heavy team has less depth to trade from than it looks like on paper.">
+              Starters vs. Bench Value
+            </CardTitle>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile label="Starter Value" value={analysis.starterValue} />
+              <StatTile label="Bench Value" value={analysis.benchValue} />
+              <StatTile
+                label="Bench Share"
+                value={
+                  analysis.starterValue + analysis.benchValue > 0
+                    ? `${Math.round((analysis.benchValue / (analysis.starterValue + analysis.benchValue)) * 100)}%`
+                    : '—'
+                }
+              />
+              <StatTile label="Total Value" value={analysis.totalValue} />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(['QB', 'RB', 'WR', 'TE'] as Position[]).map((pos) => (
+                <StatTile key={pos} label={`${pos} Value`} value={analysis.positionalValues[pos]} />
+              ))}
             </div>
           </Card>
 

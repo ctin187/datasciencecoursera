@@ -1,4 +1,5 @@
-import type { FaabSuggestion, Position, SleeperPlayer, SleeperRoster, TradeValueEntry } from '../types';
+import type { DropCandidate, FaabSuggestion, PlayersMap, Position, SleeperPlayer, SleeperRoster, TradeValueEntry } from '../types';
+import { retirementRisk } from './agingCurves';
 
 /**
  * Deterministic pseudo-random generator seeded by player_id, so the same
@@ -114,4 +115,87 @@ export function suggestFaabBid(
     priority,
     reason: reasonParts.join(' '),
   };
+}
+
+/** Roster spots not in the starting lineup, IR, or taxi squad - i.e. droppable without a lineup change. */
+export function benchPlayerIds(roster: SleeperRoster): string[] {
+  const all = roster.players ?? [];
+  const exempt = new Set([...(roster.starters ?? []), ...(roster.taxi ?? []), ...(roster.reserve ?? [])]);
+  return all.filter((id) => !exempt.has(id));
+}
+
+/**
+ * Positions a league's plain FLEX spot makes interchangeable, inferred from
+ * roster_positions (e.g. Sleeper's 'FLEX', 'WRRB_FLEX', 'REC_FLEX'). Used so a
+ * drop suggestion never crosses positions the league itself wouldn't.
+ *
+ * Deliberately does NOT fold SUPER_FLEX's QB eligibility into this set: a
+ * superflex *lineup slot* can hold a QB, but that doesn't mean a QB pickup
+ * and a bench WR are equivalent roster-value trade-offs, and suggesting
+ * "drop your WR for this QB" is a much bigger call than a same-tier flex
+ * swap. QB targets only match other bench QBs.
+ */
+export function flexEligiblePositions(rosterPositions: string[]): Set<Position> {
+  const flex = new Set<Position>();
+  const upper = rosterPositions.map((p) => p.toUpperCase());
+  if (upper.some((p) => p.includes('FLEX') && !p.includes('SUPER'))) {
+    flex.add('RB');
+    flex.add('WR');
+    flex.add('TE');
+  }
+  return flex;
+}
+
+/**
+ * Suggests which bench player(s) to drop in favor of a given waiver target,
+ * restricted to the same position or a position the league's own FLEX rules
+ * make interchangeable with it. Ranks by "keepability": low dynasty value,
+ * a falling usage trend, and elevated decline risk all make a player safer
+ * to cut.
+ */
+export function suggestDropCandidates(
+  benchIds: string[],
+  players: PlayersMap,
+  tradeValues: Map<string, TradeValueEntry>,
+  targetPosition: Position,
+  rosterPositions: string[],
+  limit = 2,
+): DropCandidate[] {
+  const flex = flexEligiblePositions(rosterPositions);
+  const eligible = benchIds.filter((id) => {
+    const pos = players[id]?.position as Position | undefined;
+    if (!pos) return false;
+    return pos === targetPosition || (flex.has(pos) && flex.has(targetPosition));
+  });
+
+  const scored = eligible.map((id) => {
+    const p = players[id]!;
+    const tv = tradeValues.get(id);
+    const trend = estimateSnapTrend(p);
+    const risk = p.age ? retirementRisk(p.position, p.age) : { risk: 'low' as const, reason: '' };
+
+    // Lower keepScore = safer to drop: low trade value, falling usage, elevated decline risk.
+    const keepScore =
+      (tv?.consensusValue ?? 0) +
+      (trend.trend === 'RISING' ? 800 : trend.trend === 'FALLING' ? -400 : 0) +
+      (risk.risk === 'high' ? -600 : risk.risk === 'medium' ? -200 : 0);
+
+    const reasonParts: string[] = [tv ? tv.tier : 'unranked / deep bench'];
+    if (trend.trend === 'FALLING') reasonParts.push('usage trending down');
+    if (trend.trend === 'RISING') reasonParts.push('usage trending up - think twice');
+    if (risk.risk !== 'low') reasonParts.push(risk.reason);
+
+    const candidate: DropCandidate = {
+      playerId: id,
+      name: p.full_name || `${p.first_name} ${p.last_name}`,
+      position: p.position as Position,
+      reason: reasonParts.join(' · '),
+    };
+    return { candidate, keepScore };
+  });
+
+  return scored
+    .sort((a, b) => a.keepScore - b.keepScore)
+    .slice(0, limit)
+    .map((s) => s.candidate);
 }

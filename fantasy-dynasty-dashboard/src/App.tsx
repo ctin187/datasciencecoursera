@@ -131,7 +131,7 @@ export default function App() {
             {tab === 'league' && <LeagueSettingsTab data={data} userId={activeUserId} tradeValueMap={derived.tradeValueMap} />}
             {tab === 'draft' && <DraftAssistantTab derived={derived} />}
             {tab === 'trade' && <TradeAnalyzerTab data={data} derived={derived} />}
-            {tab === 'waivers' && <WaiversTab data={data} derived={derived} />}
+            {tab === 'waivers' && <WaiversTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'aging' && <AgingCurvesTab derived={derived} />}
             {tab === 'roster' && <RosterHealthTab data={data} derived={derived} userId={activeUserId} />}
           </>
