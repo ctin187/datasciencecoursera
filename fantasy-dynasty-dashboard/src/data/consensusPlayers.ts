@@ -1,0 +1,140 @@
+/**
+ * Seed consensus dataset for dynasty startup drafts.
+ *
+ * IMPORTANT: Sleeper's public API does not expose ADP, dynasty trade value,
+ * or third-party consensus rankings (FantasyPros ECR, Underdog ADP,
+ * KeepTradeCut, Draft Sharks). Those sites don't offer a free open API, so
+ * this file is a hand-curated, illustrative seed dataset built from publicly
+ * known consensus dynasty rankings at the time this app was built. It is
+ * meant to be refreshed periodically (swap in a fresh export from
+ * FantasyPros/KTC/Underdog) rather than treated as a live feed.
+ *
+ * Matching to live Sleeper player IDs happens at runtime in
+ * lib/playerMatcher.ts by normalized name + position, since Sleeper's
+ * player_id values aren't stable/predictable enough to hardcode here.
+ *
+ * Shape per row:
+ * [name, position, nflTeam, age, fantasyProsEcr, sleeperAdp, underdogAdp, ktcValue]
+ *
+ * - age: approximate age entering the season this seed was built for.
+ * - *Ecr/*Adp: overall rank (1 = first off the board) in a startup draft.
+ * - ktcValue: 0-9999 dynasty trade value scale (KeepTradeCut-style).
+ */
+
+export type SeedRow = [
+  name: string,
+  position: 'QB' | 'RB' | 'WR' | 'TE',
+  team: string,
+  age: number,
+  fantasyProsEcr: number,
+  sleeperAdp: number,
+  underdogAdp: number,
+  ktcValue: number,
+];
+
+export const SEED_PLAYERS: SeedRow[] = [
+  // ---- Elite tier (WR/RB anchors) ----
+  ["Ja'Marr Chase", 'WR', 'CIN', 26, 1, 1, 2, 9800],
+  ['CeeDee Lamb', 'WR', 'DAL', 27, 4, 5, 4, 9200],
+  ['Justin Jefferson', 'WR', 'MIN', 27, 3, 3, 3, 9400],
+  ['Bijan Robinson', 'RB', 'ATL', 24, 2, 2, 1, 9600],
+  ['Jahmyr Gibbs', 'RB', 'DET', 24, 5, 4, 5, 9300],
+  ['Puka Nacua', 'WR', 'LAR', 25, 6, 6, 6, 9000],
+  ['Amon-Ra St. Brown', 'WR', 'DET', 27, 7, 7, 7, 8900],
+  ['Malik Nabers', 'WR', 'NYG', 23, 8, 9, 8, 8850],
+  ['Marvin Harrison Jr.', 'WR', 'ARI', 24, 10, 11, 10, 8300],
+  ['Breece Hall', 'RB', 'NYJ', 25, 9, 8, 9, 8400],
+  ['Nico Collins', 'WR', 'HOU', 27, 11, 10, 12, 8200],
+  ['Drake London', 'WR', 'ATL', 25, 12, 12, 11, 8100],
+  ['Brian Thomas Jr.', 'WR', 'JAX', 23, 13, 13, 13, 8050],
+  ['Jonathon Brooks', 'RB', 'CAR', 23, 20, 22, 21, 7100],
+  ['De\'Von Achane', 'RB', 'MIA', 24, 14, 14, 15, 7900],
+  ['Garrett Wilson', 'WR', 'NYJ', 26, 15, 16, 14, 7850],
+  ['Chase Brown', 'RB', 'CIN', 26, 18, 17, 18, 7500],
+  ['Rome Odunze', 'WR', 'CHI', 24, 17, 18, 16, 7600],
+  ['Ladd McConkey', 'WR', 'LAC', 24, 16, 15, 17, 7700],
+  ['Jayden Daniels', 'QB', 'WAS', 25, 19, 19, 19, 7450],
+  ['Caleb Williams', 'QB', 'CHI', 24, 22, 21, 22, 7000],
+  ['Brock Bowers', 'TE', 'LV', 23, 21, 20, 20, 7350],
+  ['Josh Allen', 'QB', 'BUF', 30, 23, 24, 23, 6900],
+  ['Patrick Mahomes', 'QB', 'KC', 31, 25, 25, 25, 6700],
+  ['Jaxon Smith-Njigba', 'WR', 'SEA', 24, 24, 23, 24, 6850],
+  ['Tyreek Hill', 'WR', 'MIA', 32, 30, 31, 29, 5600],
+  ['A.J. Brown', 'WR', 'PHI', 29, 26, 26, 27, 6500],
+  ['Kyren Williams', 'RB', 'LAR', 25, 27, 27, 26, 6300],
+  ['Jonathan Taylor', 'RB', 'IND', 27, 28, 28, 28, 6200],
+  ['Trey McBride', 'TE', 'ARI', 26, 29, 29, 30, 6100],
+  ['DK Metcalf', 'WR', 'PIT', 28, 33, 33, 32, 5700],
+  ['C.J. Stroud', 'QB', 'HOU', 24, 31, 30, 31, 6000],
+  ['Anthony Richardson', 'QB', 'IND', 24, 35, 34, 35, 5300],
+  ['Xavier Worthy', 'WR', 'KC', 23, 32, 32, 33, 5900],
+  ['Rashee Rice', 'WR', 'KC', 26, 34, 35, 34, 5450],
+  ['Jordan Addison', 'WR', 'MIN', 24, 36, 36, 36, 5350],
+  ['Josh Jacobs', 'RB', 'GB', 28, 38, 37, 38, 5100],
+  ['Kenneth Walker III', 'RB', 'SEA', 25, 37, 38, 37, 5150],
+  ['Travis Etienne Jr.', 'RB', 'JAX', 27, 40, 40, 40, 4800],
+  ['Isiah Pacheco', 'RB', 'KC', 27, 42, 41, 42, 4600],
+  ['George Pickens', 'WR', 'DAL', 25, 39, 39, 39, 4900],
+  ['Zay Flowers', 'WR', 'BAL', 25, 41, 42, 41, 4750],
+  ['Tank Dell', 'WR', 'HOU', 26, 45, 46, 45, 4200],
+  ['Sam LaPorta', 'TE', 'DET', 25, 43, 43, 44, 4400],
+  ['Michael Pittman Jr.', 'WR', 'IND', 28, 47, 47, 47, 4000],
+  ['Chris Olave', 'WR', 'NO', 26, 44, 44, 43, 4300],
+  ['DJ Moore', 'WR', 'CHI', 29, 48, 49, 48, 3900],
+  ['Terry McLaurin', 'WR', 'WAS', 31, 50, 51, 50, 3600],
+  ['Deebo Samuel Sr.', 'WR', 'WAS', 30, 52, 53, 52, 3300],
+  ['Davante Adams', 'WR', 'LAR', 33, 55, 56, 55, 2800],
+  ['Stefon Diggs', 'WR', 'NE', 32, 56, 57, 56, 2700],
+  ['Mike Evans', 'WR', 'TB', 33, 54, 55, 54, 2900],
+  ['Cooper Kupp', 'WR', 'SEA', 33, 58, 59, 58, 2500],
+  ['Saquon Barkley', 'RB', 'PHI', 29, 46, 45, 46, 4100],
+  ['Derrick Henry', 'RB', 'BAL', 32, 60, 61, 60, 2400],
+  ['Alvin Kamara', 'RB', 'NO', 31, 62, 63, 62, 2200],
+  ['Aaron Jones', 'RB', 'MIN', 31, 64, 65, 64, 2000],
+  ['James Cook', 'RB', 'BUF', 26, 49, 48, 49, 3800],
+  ['Rachaad White', 'RB', 'TB', 27, 61, 62, 61, 2350],
+  ['Najee Harris', 'RB', 'LAC', 28, 59, 60, 59, 2450],
+  ['Tony Pollard', 'RB', 'TEN', 29, 63, 64, 63, 2100],
+  ['Brian Robinson Jr.', 'RB', 'WAS', 27, 65, 66, 65, 1950],
+  ['Javonte Williams', 'RB', 'DAL', 26, 67, 68, 67, 1800],
+  ['Rhamondre Stevenson', 'RB', 'NE', 28, 66, 67, 66, 1900],
+  ['Tua Tagovailoa', 'QB', 'MIA', 28, 51, 50, 51, 3400],
+  ['Jared Goff', 'QB', 'DET', 31, 68, 69, 68, 1700],
+  ['Jordan Love', 'QB', 'GB', 27, 53, 52, 53, 3100],
+  ['Trevor Lawrence', 'QB', 'JAX', 26, 57, 58, 57, 2600],
+  ['Kyler Murray', 'QB', 'ARI', 28, 69, 70, 69, 1650],
+  ['Dak Prescott', 'QB', 'DAL', 33, 71, 72, 71, 1400],
+  ['Lamar Jackson', 'QB', 'BAL', 29, 70, 71, 70, 1600],
+  ['Joe Burrow', 'QB', 'CIN', 29, 72, 73, 72, 1350],
+  ['Bo Nix', 'QB', 'DEN', 26, 73, 74, 73, 1300],
+  ['Drake Maye', 'QB', 'NE', 24, 74, 75, 74, 1250],
+  ['J.J. McCarthy', 'QB', 'MIN', 23, 75, 76, 75, 1200],
+  ['Kyle Pitts', 'TE', 'ATL', 26, 76, 77, 76, 1150],
+  ['Mark Andrews', 'TE', 'BAL', 31, 78, 79, 78, 1000],
+  ['Evan Engram', 'TE', 'DEN', 31, 80, 81, 80, 900],
+  ['Dallas Goedert', 'TE', 'PHI', 29, 79, 80, 79, 950],
+  ['David Njoku', 'TE', 'CLE', 29, 77, 78, 77, 1050],
+  ['Jerry Jeudy', 'WR', 'CLE', 27, 82, 83, 82, 1450],
+  ['Courtland Sutton', 'WR', 'DEN', 30, 83, 84, 83, 1300],
+  ['Keenan Allen', 'WR', 'LAC', 34, 90, 91, 90, 700],
+  ['Diontae Johnson', 'WR', 'CLE', 29, 84, 85, 84, 1200],
+  ['Marquise Brown', 'WR', 'KC', 29, 86, 87, 86, 1100],
+  ['Christian Watson', 'WR', 'GB', 27, 85, 86, 85, 1150],
+  ['Jameson Williams', 'WR', 'DET', 25, 81, 82, 81, 1500],
+  ['Jaylen Waddle', 'WR', 'MIA', 27, 88, 88, 87, 3200],
+  ['Calvin Ridley', 'WR', 'TEN', 30, 89, 90, 89, 1000],
+  ['Tyler Lockett', 'WR', 'TEN', 33, 95, 96, 95, 500],
+  ['Amari Cooper', 'WR', 'LV', 32, 96, 97, 96, 450],
+  ['Zach Charbonnet', 'RB', 'SEA', 25, 91, 92, 91, 2600],
+  ['Jaylen Warren', 'RB', 'PIT', 27, 92, 93, 92, 2300],
+  ['Bucky Irving', 'RB', 'TB', 23, 87, 89, 88, 3050],
+  ['Blake Corum', 'RB', 'LAR', 24, 93, 94, 93, 2150],
+  ['Tyjae Spears', 'RB', 'TEN', 24, 94, 95, 94, 2050],
+  ['Ray Davis', 'RB', 'BUF', 26, 97, 98, 97, 1700],
+  ['Jerome Ford', 'RB', 'CLE', 26, 98, 99, 98, 1500],
+  ['Roschon Johnson', 'RB', 'CHI', 25, 99, 100, 99, 1400],
+  ['Ricky Pearsall', 'WR', 'SF', 25, 100, 101, 100, 3350],
+  ['Xavier Legette', 'WR', 'CAR', 24, 101, 102, 101, 1650],
+  ['Keon Coleman', 'WR', 'BUF', 23, 102, 103, 102, 2400],
+  ['Adonai Mitchell', 'WR', 'IND', 23, 103, 104, 103, 1800],
+];
