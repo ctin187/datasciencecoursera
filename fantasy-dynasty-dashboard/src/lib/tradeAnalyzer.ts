@@ -1,5 +1,6 @@
-import type { LifecyclePhase, ThreeDValue, TradeValueEntry } from '../types';
+import type { LifecyclePhase, PlayersMap, ThreeDValue, TradeValueEntry } from '../types';
 import { peakAgeRange } from './agingCurves';
+import { resolvePlayerValue } from './playerValue';
 
 export interface TradeAsset {
   type: 'player' | 'pick';
@@ -37,17 +38,23 @@ export const PICK_VALUES: Record<string, number> = {
 
 function assetValue(
   asset: TradeAsset,
+  players: PlayersMap,
   tradeValues: Map<string, TradeValueEntry>,
 ): { value: number; age: number | null } {
   if (asset.type === 'pick') {
     return { value: asset.pickValue ?? 0, age: null };
   }
-  const entry = asset.playerId ? tradeValues.get(asset.playerId) : undefined;
-  return { value: entry?.consensusValue ?? 0, age: entry?.age ?? null };
+  if (!asset.playerId) return { value: 0, age: null };
+  // Goes through the shared resolver (curated value, falling back to a
+  // search_rank estimate) rather than reading the curated map directly -
+  // otherwise any non-curated player added to a trade silently counted as
+  // worth zero in this exact math, even though the UI displayed a value for them.
+  const resolved = resolvePlayerValue(asset.playerId, players, tradeValues);
+  return { value: resolved.consensusValue, age: resolved.age };
 }
 
-function summarizeSide(assets: TradeAsset[], tradeValues: Map<string, TradeValueEntry>): TradeSideResult {
-  const withValues = assets.map((a) => assetValue(a, tradeValues));
+function summarizeSide(assets: TradeAsset[], players: PlayersMap, tradeValues: Map<string, TradeValueEntry>): TradeSideResult {
+  const withValues = assets.map((a) => assetValue(a, players, tradeValues));
   const totalValue = withValues.reduce((s, v) => s + v.value, 0);
   const ages = withValues.map((v) => v.age).filter((a): a is number => a !== null);
   const avgAge = ages.length ? ages.reduce((s, a) => s + a, 0) / ages.length : null;
@@ -57,10 +64,11 @@ function summarizeSide(assets: TradeAsset[], tradeValues: Map<string, TradeValue
 export function analyzeTrade(
   sideAAssets: TradeAsset[],
   sideBAssets: TradeAsset[],
+  players: PlayersMap,
   tradeValues: Map<string, TradeValueEntry>,
 ): TradeResult {
-  const sideA = summarizeSide(sideAAssets, tradeValues);
-  const sideB = summarizeSide(sideBAssets, tradeValues);
+  const sideA = summarizeSide(sideAAssets, players, tradeValues);
+  const sideB = summarizeSide(sideBAssets, players, tradeValues);
 
   const total = sideA.totalValue + sideB.totalValue;
   const deltaPct = total === 0 ? 0 : Math.round(((sideA.totalValue - sideB.totalValue) / total) * 200);

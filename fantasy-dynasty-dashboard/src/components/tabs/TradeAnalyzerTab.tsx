@@ -11,24 +11,23 @@ import {
 } from '../../lib/tradeAnalyzer';
 import { peakAgeRange } from '../../lib/agingCurves';
 import { detectLifecyclePhase } from '../../lib/rosterAnalyzer';
+import { resolvePlayerValue } from '../../lib/playerValue';
 import type { LifecyclePhase, PlayersMap, SleeperRoster } from '../../types';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
 
-/** Fallback shown for any rostered player missing from the curated trade-value seed dataset. */
 const UNRANKED_TIER = 'Unranked / deep roster';
 
 function playerLabel(id: string, players: PlayersMap, derived: Derived) {
-  const tv = derived.tradeValueMap.get(id);
-  const p = players[id];
+  const resolved = resolvePlayerValue(id, players, derived.tradeValueMap);
   return {
-    name: tv?.name ?? p?.full_name ?? `${p?.first_name ?? ''} ${p?.last_name ?? ''}`.trim() ?? id,
-    position: tv?.position ?? (p?.position as string) ?? '?',
-    age: tv?.age ?? p?.age ?? null,
-    value: tv?.consensusValue ?? 0,
-    tier: tv?.tier ?? UNRANKED_TIER,
-    team: p?.team ?? null,
-    status: p?.status ?? 'Unknown',
+    name: resolved.name,
+    position: resolved.position,
+    age: resolved.age,
+    value: resolved.consensusValue,
+    tier: resolved.tier,
+    team: resolved.team,
+    status: resolved.status,
   };
 }
 
@@ -262,12 +261,12 @@ export function TradeAnalyzerTab({
     let ageCount = 0;
     for (const id of roster.players ?? []) {
       const p = data.players[id];
-      const tv = derived.tradeValueMap.get(id);
       if (!p?.age) continue;
+      const resolved = resolvePlayerValue(id, data.players, derived.tradeValueMap);
       ageSum += p.age;
       ageCount++;
-      if ((tv?.consensusValue ?? 0) >= 6000 && p.age >= 28) eliteAging++;
-      if ((tv?.consensusValue ?? 0) >= 1500 && p.age <= 24) young++;
+      if (resolved.consensusValue >= 6000 && p.age >= 28) eliteAging++;
+      if (resolved.consensusValue >= 1500 && p.age <= 24) young++;
     }
     const avgAge = ageCount ? ageSum / ageCount : 0;
     return detectLifecyclePhase(eliteAging, young, avgAge, roster.settings.wins ?? 0);
@@ -277,8 +276,8 @@ export function TradeAnalyzerTab({
   const phaseB = phaseFor(rosterBId);
 
   const result = useMemo(
-    () => analyzeTrade(sideAAssets, sideBAssets, derived.tradeValueMap),
-    [sideAAssets, sideBAssets, derived.tradeValueMap],
+    () => analyzeTrade(sideAAssets, sideBAssets, data.players, derived.tradeValueMap),
+    [sideAAssets, sideBAssets, data.players, derived.tradeValueMap],
   );
 
   const assessment = tradeContextAssessment(result.sideA, result.sideB, phaseA, phaseB);

@@ -3,6 +3,7 @@ import type { TradeValueEntry } from '../../types';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
+import { resolvePlayerValue } from '../../lib/playerValue';
 
 function scoringFormatLabel(scoring: Record<string, number>): string {
   const rec = scoring.rec ?? 0;
@@ -111,10 +112,10 @@ export function LeagueSettingsTab({
           <div className="flex flex-wrap gap-1.5">
             {(myRoster.players ?? []).map((id) => {
               const p = players[id];
-              const tv = tradeValueMap.get(id);
               if (!p) return null;
+              const resolved = resolvePlayerValue(id, players, tradeValueMap);
               return (
-                <Badge key={id} color={tv && tv.consensusValue >= 6000 ? 'purple' : 'gray'}>
+                <Badge key={id} color={resolved.consensusValue >= 6000 ? 'purple' : 'gray'}>
                   {p.full_name || `${p.first_name} ${p.last_name}`} · {p.position}
                   {p.age ? ` · ${p.age}y` : ''}
                 </Badge>

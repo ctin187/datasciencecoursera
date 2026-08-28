@@ -137,4 +137,22 @@ export const SEED_PLAYERS: SeedRow[] = [
   ['Xavier Legette', 'WR', 'CAR', 24, 101, 102, 101, 1650],
   ['Keon Coleman', 'WR', 'BUF', 23, 102, 103, 102, 2400],
   ['Adonai Mitchell', 'WR', 'IND', 23, 103, 104, 103, 1800],
+
+  // ---- Audit pass: clear top-tier omissions from the first cut ----
+  ['Jalen Hurts', 'QB', 'PHI', 27, 27, 27, 27, 6300],
+  ['Justin Herbert', 'QB', 'LAC', 27, 34, 33, 34, 5500],
+  ['Matthew Stafford', 'QB', 'LAR', 37, 78, 79, 78, 800],
+  ['Baker Mayfield', 'QB', 'TB', 30, 62, 63, 62, 2050],
+  ['Kirk Cousins', 'QB', 'ATL', 37, 82, 83, 82, 650],
+  ['Geno Smith', 'QB', 'LV', 35, 80, 81, 80, 700],
+  ['Sam Darnold', 'QB', 'SEA', 28, 66, 67, 66, 1900],
+  ['David Montgomery', 'RB', 'DET', 28, 56, 57, 56, 2500],
+  ['Joe Mixon', 'RB', 'HOU', 29, 58, 59, 58, 2250],
+  ["D'Andre Swift", 'RB', 'CHI', 27, 68, 69, 68, 1750],
+  ['Tee Higgins', 'WR', 'CIN', 26, 20, 19, 20, 7200],
+  ['DeVonta Smith', 'WR', 'PHI', 26, 22, 22, 22, 6600],
+  ['Chris Godwin', 'WR', 'TB', 29, 60, 61, 60, 2150],
+  ['George Kittle', 'TE', 'SF', 32, 40, 41, 40, 3200],
+  ['T.J. Hockenson', 'TE', 'MIN', 28, 46, 47, 46, 2700],
+  ['Travis Kelce', 'TE', 'KC', 36, 70, 71, 70, 1300],
 ];

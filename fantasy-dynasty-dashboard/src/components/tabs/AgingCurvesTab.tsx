@@ -9,12 +9,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import type { LeagueData } from '../../hooks/useLeagueData';
 import type { useDerivedData } from '../../hooks/useDerivedData';
 import type { Position } from '../../types';
 import { Card, CardTitle } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
 import { ageMultiplier, AGING_CURVES } from '../../lib/agingCurves';
+import { resolvePlayerValue } from '../../lib/playerValue';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
 
@@ -47,18 +49,30 @@ interface SellHighRow {
   runwayYears: number;
 }
 
-export function AgingCurvesTab({ derived }: { derived: Derived }) {
+export function AgingCurvesTab({ data, derived }: { data: LeagueData; derived: Derived }) {
   const curveData = useMemo(buildCurveData, []);
   const [lookupQuery, setLookupQuery] = useState('');
 
+  // Searches every live Sleeper player, not just the curated ~130-player seed
+  // dataset - a curated player still gets exact age-curve data, a non-curated
+  // one gets the position's generic curve (age-based, not player-specific)
+  // but no multi-year points chart, since that needs an ADP rank to project from.
   const matches = useMemo(() => {
-    if (!lookupQuery.trim()) return [];
-    const q = lookupQuery.toLowerCase();
-    return derived.tradeValues.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 8);
-  }, [lookupQuery, derived.tradeValues]);
+    const q = lookupQuery.trim().toLowerCase();
+    if (!q) return [];
+    const results: { playerId: string; name: string; position: Position; age: number | null }[] = [];
+    for (const p of Object.values(data.players)) {
+      if (results.length >= 8) break;
+      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) continue;
+      const full = (p.full_name || `${p.first_name} ${p.last_name}`).toLowerCase();
+      if (!full.includes(q)) continue;
+      results.push({ playerId: p.player_id, name: p.full_name || `${p.first_name} ${p.last_name}`, position: p.position as Position, age: p.age });
+    }
+    return results;
+  }, [lookupQuery, data.players]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = selectedId ? derived.tradeValueMap.get(selectedId) : null;
+  const selected = selectedId ? resolvePlayerValue(selectedId, data.players, derived.tradeValueMap) : null;
   const selectedValue = selectedId ? derived.threeDValues.get(selectedId) : null;
 
   const sellHighCandidates: SellHighRow[] = useMemo(() => {
@@ -150,7 +164,7 @@ export function AgingCurvesTab({ derived }: { derived: Derived }) {
           )}
         </div>
 
-        {selected && selectedValue && (
+        {selected && (
           <div>
             <div className="mb-3 flex items-center gap-2">
               <span className="text-lg font-semibold">{selected.name}</span>
@@ -158,17 +172,24 @@ export function AgingCurvesTab({ derived }: { derived: Derived }) {
               <Badge color="gray">Age {selected.age}</Badge>
               <Badge color="blue">{selected.tier}</Badge>
             </div>
-            <div style={{ height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={selectedValue.multiYear} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="year" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} />
-                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 12 }} />
-                  <Line type="monotone" dataKey="projectedPoints" name="Projected Pts" stroke="#c084fc" strokeWidth={2} dot />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {selectedValue ? (
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={selectedValue.multiYear} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="year" stroke="#64748b" fontSize={12} />
+                    <YAxis stroke="#64748b" fontSize={12} />
+                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 12 }} />
+                    <Line type="monotone" dataKey="projectedPoints" name="Projected Pts" stroke="#c084fc" strokeWidth={2} dot />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                No multi-year points projection for this player - that chart is only computed for the curated ADP
+                dataset. Their position still peaks {AGING_CURVES[selected.position].peakStart}-{AGING_CURVES[selected.position].peakEnd}.
+              </p>
+            )}
           </div>
         )}
         {!selected && <p className="text-sm text-slate-500">Search for a player to see their projected output through 2035.</p>}

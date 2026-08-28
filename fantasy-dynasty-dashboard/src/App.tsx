@@ -21,7 +21,6 @@ type TabId = (typeof TABS)[number]['id'];
 
 export default function App() {
   const [leagueIdInput, setLeagueIdInput] = useState('');
-  const [userIdInput, setUserIdInput] = useState('');
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>('');
   const [tab, setTab] = useState<TabId>('league');
@@ -34,8 +33,18 @@ export default function App() {
     const trimmed = leagueIdInput.trim();
     if (!trimmed) return;
     setActiveLeagueId(trimmed);
-    setActiveUserId(userIdInput.trim());
+    setActiveUserId('');
   };
+
+  const teamOptions = data
+    ? [...data.users]
+        .map((u) => {
+          const roster = data.rosters.find((r) => r.owner_id === u.user_id);
+          const record = roster ? ` (${roster.settings.wins}-${roster.settings.losses}${roster.settings.ties ? `-${roster.settings.ties}` : ''})` : '';
+          return { userId: u.user_id, label: `${u.metadata?.team_name || u.display_name}${record}` };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label))
+    : [];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -59,15 +68,6 @@ export default function App() {
                   className="w-56 rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2"
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-slate-400">
-                Your User ID (optional)
-                <input
-                  value={userIdInput}
-                  onChange={(e) => setUserIdInput(e.target.value)}
-                  placeholder="for roster analysis"
-                  className="w-48 rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2"
-                />
-              </label>
               <button
                 type="submit"
                 className="rounded-md bg-violet-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
@@ -77,6 +77,24 @@ export default function App() {
               </button>
             </form>
           </div>
+          {data && (
+            <div className="mt-3 flex items-center gap-2">
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                Your Team
+                <select
+                  value={activeUserId}
+                  onChange={(e) => setActiveUserId(e.target.value)}
+                  className="w-64 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2"
+                >
+                  <option value="">— select your team —</option>
+                  {teamOptions.map((t) => (
+                    <option key={t.userId} value={t.userId}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-xs text-slate-600">Powers roster analysis, waiver drop suggestions, and draft-turn tracking.</span>
+            </div>
+          )}
         </div>
         <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2 sm:px-6">
           {TABS.map((t) => (
@@ -134,7 +152,7 @@ export default function App() {
               <TradeAnalyzerTab data={data} derived={derived} onRefreshRosters={refreshRosters} refreshingRosters={refreshingRosters} />
             )}
             {tab === 'waivers' && <WaiversTab data={data} derived={derived} userId={activeUserId} />}
-            {tab === 'aging' && <AgingCurvesTab derived={derived} />}
+            {tab === 'aging' && <AgingCurvesTab data={data} derived={derived} />}
             {tab === 'roster' && <RosterHealthTab data={data} derived={derived} userId={activeUserId} />}
           </>
         )}
