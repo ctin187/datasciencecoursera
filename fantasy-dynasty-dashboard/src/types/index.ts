@@ -111,6 +111,8 @@ export interface SleeperPlayer {
   college?: string;
   number?: number | null;
   depth_chart_order?: number | null;
+  /** Sleeper's own relevance ordinal across its full player database (lower = more notable). Not fantasy-specific, but the only universal signal available for players outside the curated seed dataset. */
+  search_rank?: number | null;
 }
 
 export type PlayersMap = Record<string, SleeperPlayer>;
@@ -220,6 +222,19 @@ export interface DropCandidate {
   name: string;
   position: Position;
   reason: string;
+}
+
+export interface ResolvedPlayerValue {
+  playerId: string;
+  name: string;
+  position: Position;
+  age: number | null;
+  team: string | null;
+  status: string;
+  consensusValue: number;
+  tier: string;
+  /** 'curated' = from the hand-curated ADP/trade-value seed dataset. 'estimated' = derived from Sleeper's search_rank, no seed entry. 'none' = no signal available at all. */
+  source: 'curated' | 'estimated' | 'none';
 }
 
 export type LetterGrade = 'A' | 'B' | 'C' | 'D' | 'F';

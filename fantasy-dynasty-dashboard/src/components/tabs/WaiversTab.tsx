@@ -13,6 +13,7 @@ import {
   suggestDropCandidates,
   suggestFaabBid,
 } from '../../lib/waiverOptimizer';
+import { resolvePlayerValue } from '../../lib/playerValue';
 import type { DropCandidate } from '../../types';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
@@ -57,8 +58,8 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
     return freeAgents
       .map((p) => {
         const trend = estimateSnapTrend(p);
-        const tv = derived.tradeValueMap.get(p.player_id);
-        const suggestion = suggestFaabBid(p, trend, tv, { startingBudget, spentByRoster });
+        const resolved = resolvePlayerValue(p.player_id, data.players, derived.tradeValueMap);
+        const suggestion = suggestFaabBid(p, trend, resolved, { startingBudget, spentByRoster });
         const dropCandidates = myRoster
           ? suggestDropCandidates(
               myBench,

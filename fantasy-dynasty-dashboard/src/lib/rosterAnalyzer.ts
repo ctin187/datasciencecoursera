@@ -10,6 +10,7 @@ import type {
   TradeValueEntry,
 } from '../types';
 import { retirementRisk } from './agingCurves';
+import { resolvePlayerValue } from './playerValue';
 
 const SKILL_POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
 
@@ -38,11 +39,11 @@ export function analyzeRoster(
     if (!p) continue;
     const pos = (SKILL_POSITIONS.includes(p.position as Position) ? p.position : null) as Position | null;
 
-    const tv = tradeValues.get(id);
-    if (pos) positionalValues[pos] += tv?.consensusValue ?? 0;
-    totalValue += tv?.consensusValue ?? 0;
-    if (starterSet.has(id)) starterValue += tv?.consensusValue ?? 0;
-    else benchValue += tv?.consensusValue ?? 0;
+    const resolved = resolvePlayerValue(id, players, tradeValues);
+    if (pos) positionalValues[pos] += resolved.consensusValue;
+    totalValue += resolved.consensusValue;
+    if (starterSet.has(id)) starterValue += resolved.consensusValue;
+    else benchValue += resolved.consensusValue;
 
     if (!p.age || !pos) continue;
 
@@ -50,9 +51,9 @@ export function analyzeRoster(
     ageSum += p.age;
     ageCount++;
 
-    const isElite = (tv?.consensusValue ?? 0) >= 6000;
+    const isElite = resolved.consensusValue >= 6000;
     if (isElite && p.age >= 28) eliteAgingCount++;
-    if ((tv?.consensusValue ?? 0) >= 1500 && p.age <= 24) youngAssetCount++;
+    if (resolved.consensusValue >= 1500 && p.age <= 24) youngAssetCount++;
 
     const risk = retirementRisk(pos, p.age);
     if (risk.risk !== 'low') {
@@ -215,19 +216,19 @@ export function gradeRoster(
     const p = players[id];
     if (!p) continue;
     const pos = SKILL_POSITIONS.includes(p.position as Position) ? (p.position as Position) : null;
-    const tv = tradeValues.get(id);
+    const resolved = resolvePlayerValue(id, players, tradeValues);
 
     if (pos && p.age) {
       positionalAges[pos].push(p.age);
-      if (tv && tv.consensusValue >= 6000 && p.age >= 28) eliteAgingCount++;
-      if (tv && tv.consensusValue >= 1500 && p.age <= 25) youngAssetCount++;
+      if (resolved.consensusValue >= 6000 && p.age >= 28) eliteAgingCount++;
+      if (resolved.consensusValue >= 1500 && p.age <= 25) youngAssetCount++;
       if (p.age >= 26 && p.age <= 27) middleZoneCount++;
       if (p.age >= 30) injuryRiskPoints += 5;
     }
     // Sleeper's public data has no injury-history field - injury_status reflects
     // this week's report only, used here as the best available risk proxy.
     if (p.injury_status) injuryRiskPoints += 3;
-    if (pos) qualityCountByPos[pos] += (tv?.consensusValue ?? 0) >= QUALITY_STARTER_VALUE ? 1 : 0;
+    if (pos) qualityCountByPos[pos] += resolved.consensusValue >= QUALITY_STARTER_VALUE ? 1 : 0;
 
     if (starterSet.has(id)) {
       starterProjected += threeDValues.get(id)?.currentProjection ?? 0;

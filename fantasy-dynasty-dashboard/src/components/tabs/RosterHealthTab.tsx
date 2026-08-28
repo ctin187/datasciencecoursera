@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
 import { analyzeRoster, futureRosterProjection, gradeLeague, phaseDescription } from '../../lib/rosterAnalyzer';
 import { retirementRisk } from '../../lib/agingCurves';
+import { resolvePlayerValue } from '../../lib/playerValue';
 import type { LetterGrade } from '../../types';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
@@ -34,6 +35,7 @@ interface RosterPlayerRow {
   isStarter: boolean;
   consensusValue: number;
   tier: string;
+  source: 'curated' | 'estimated' | 'none';
   currentProjection: number;
   threeYearOutlook: number;
   risk: 'low' | 'medium' | 'high';
@@ -83,17 +85,18 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
       .map((id) => {
         const p = data.players[id];
         if (!p) return null;
-        const tv = derived.tradeValueMap.get(id);
+        const resolved = resolvePlayerValue(id, data.players, derived.tradeValueMap);
         const v = derived.threeDValues.get(id);
         const risk = p.age ? retirementRisk(p.position, p.age).risk : 'low';
         const row: RosterPlayerRow = {
           playerId: id,
-          name: p.full_name || `${p.first_name} ${p.last_name}`,
-          position: (tv?.position ?? p.position) as Position,
+          name: resolved.name,
+          position: resolved.position,
           age: p.age,
           isStarter: starterSet.has(id),
-          consensusValue: tv?.consensusValue ?? 0,
-          tier: tv?.tier ?? '—',
+          consensusValue: resolved.consensusValue,
+          tier: resolved.tier,
+          source: resolved.source,
           currentProjection: v ? Math.round(v.currentProjection) : 0,
           threeYearOutlook: v ? Math.round(v.threeYearOutlook) : 0,
           risk,
@@ -115,7 +118,16 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
       render: (r) => <Badge color={r.isStarter ? 'green' : 'gray'}>{r.isStarter ? 'Starter' : 'Bench'}</Badge>,
     },
     { key: 'consensusValue', header: 'Trade Value', accessor: (r) => r.consensusValue, align: 'right' },
-    { key: 'tier', header: 'Tier', accessor: (r) => r.tier },
+    {
+      key: 'tier',
+      header: 'Tier',
+      accessor: (r) => r.tier,
+      render: (r) => (
+        <span title={r.source === 'estimated' ? "Estimated from Sleeper's own relevance ranking - not a curated consensus value." : undefined}>
+          {r.tier}
+        </span>
+      ),
+    },
     { key: 'currentProjection', header: 'Current Pts', accessor: (r) => r.currentProjection, align: 'right' },
     { key: 'threeYearOutlook', header: '3-yr Avg', accessor: (r) => r.threeYearOutlook, align: 'right' },
     {

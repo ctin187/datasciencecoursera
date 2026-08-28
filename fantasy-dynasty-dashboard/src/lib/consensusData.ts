@@ -1,7 +1,7 @@
 import type { ConsensusADP, PlayersMap, Position, TradeValueEntry } from '../types';
 import { matchSeedPlayers } from './playerMatcher';
 
-function tierForValue(value: number): string {
+export function tierForValue(value: number): string {
   if (value >= 8500) return 'Tier 1 - Cornerstone';
   if (value >= 7000) return 'Tier 2 - Elite';
   if (value >= 5000) return 'Tier 3 - High-End Starter';

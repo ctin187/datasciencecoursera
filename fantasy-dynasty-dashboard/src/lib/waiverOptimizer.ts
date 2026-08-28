@@ -1,5 +1,6 @@
 import type { DropCandidate, FaabSuggestion, PlayersMap, Position, SleeperPlayer, SleeperRoster, TradeValueEntry } from '../types';
 import { retirementRisk } from './agingCurves';
+import { resolvePlayerValue } from './playerValue';
 
 /**
  * Deterministic pseudo-random generator seeded by player_id, so the same
@@ -69,7 +70,7 @@ export interface FaabContext {
 export function suggestFaabBid(
   player: SleeperPlayer,
   trend: SnapTrend,
-  tradeValue: TradeValueEntry | undefined,
+  tradeValue: Pick<TradeValueEntry, 'consensusValue' | 'tier'> | undefined,
   ctx: FaabContext,
 ): FaabSuggestion {
   const remainingBudgets = Array.from(ctx.spentByRoster.values()).map((spent) => ctx.startingBudget - spent);
@@ -170,17 +171,17 @@ export function suggestDropCandidates(
 
   const scored = eligible.map((id) => {
     const p = players[id]!;
-    const tv = tradeValues.get(id);
+    const resolved = resolvePlayerValue(id, players, tradeValues);
     const trend = estimateSnapTrend(p);
     const risk = p.age ? retirementRisk(p.position, p.age) : { risk: 'low' as const, reason: '' };
 
     // Lower keepScore = safer to drop: low trade value, falling usage, elevated decline risk.
     const keepScore =
-      (tv?.consensusValue ?? 0) +
+      resolved.consensusValue +
       (trend.trend === 'RISING' ? 800 : trend.trend === 'FALLING' ? -400 : 0) +
       (risk.risk === 'high' ? -600 : risk.risk === 'medium' ? -200 : 0);
 
-    const reasonParts: string[] = [tv ? tv.tier : 'unranked / deep bench'];
+    const reasonParts: string[] = [resolved.tier];
     if (trend.trend === 'FALLING') reasonParts.push('usage trending down');
     if (trend.trend === 'RISING') reasonParts.push('usage trending up - think twice');
     if (risk.risk !== 'low') reasonParts.push(risk.reason);
