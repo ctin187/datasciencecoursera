@@ -145,7 +145,12 @@ export const SEED_PLAYERS: SeedRow[] = [
   ['Baker Mayfield', 'QB', 'TB', 30, 62, 63, 62, 2050],
   ['Kirk Cousins', 'QB', 'ATL', 37, 82, 83, 82, 650],
   ['Geno Smith', 'QB', 'LV', 35, 80, 81, 80, 700],
-  ['Sam Darnold', 'QB', 'SEA', 28, 66, 67, 66, 1900],
+  // Corrected per user report (2026-08): Darnold is now a proven, reigning
+  // Super Bowl-winning starter - well outside this dataset's original
+  // training-time snapshot of him as a journeyman backup/backup-tier value.
+  // This is exactly the kind of drift a static seed dataset is vulnerable
+  // to; flag any other name here that looks stale.
+  ['Sam Darnold', 'QB', 'SEA', 28, 24, 25, 24, 7000],
   ['David Montgomery', 'RB', 'DET', 28, 56, 57, 56, 2500],
   ['Joe Mixon', 'RB', 'HOU', 29, 58, 59, 58, 2250],
   ["D'Andre Swift", 'RB', 'CHI', 27, 68, 69, 68, 1750],

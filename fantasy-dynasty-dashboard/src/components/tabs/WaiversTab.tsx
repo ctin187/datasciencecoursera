@@ -9,6 +9,7 @@ import {
   benchPlayerIds,
   estimateSnapTrend,
   faabSpentByRoster,
+  priorityScore,
   rosteredPlayerIds,
   suggestDropCandidates,
   suggestFaabBid,
@@ -24,10 +25,13 @@ interface WaiverRow {
   position: Position;
   team: string | null;
   age: number | null;
+  consensusValue: number;
+  tier: string;
   snapTrendLabel: string;
   targetTrendLabel: string;
   trend: string;
   opportunityScore: number;
+  rankScore: number;
   suggestedBid: number;
   priority: string;
   reason: string;
@@ -67,6 +71,7 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
               derived.tradeValueMap,
               p.position as Position,
               data.league.roster_positions,
+              resolved.consensusValue,
               1,
             )
           : [];
@@ -76,17 +81,20 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
           position: p.position as Position,
           team: p.team,
           age: p.age,
+          consensusValue: resolved.consensusValue,
+          tier: resolved.tier,
           snapTrendLabel: `${(trend.earlySnapShare * 100).toFixed(0)}% → ${(trend.recentSnapShare * 100).toFixed(0)}%`,
           targetTrendLabel: `${(trend.earlyTargetShare * 100).toFixed(0)}% → ${(trend.recentTargetShare * 100).toFixed(0)}%`,
           trend: trend.trend,
           opportunityScore: trend.opportunityScore,
+          rankScore: priorityScore(trend, resolved.consensusValue),
           suggestedBid: suggestion.suggestedBid,
           priority: suggestion.priority,
           reason: suggestion.reason,
           dropCandidates,
         };
       })
-      .sort((a, b) => b.opportunityScore - a.opportunityScore)
+      .sort((a, b) => b.rankScore - a.rankScore)
       .slice(0, 150);
   }, [freeAgents, derived.tradeValueMap, startingBudget, spentByRoster, myRoster, myBench, data.players, data.league.roster_positions]);
 
@@ -96,8 +104,17 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
     { key: 'name', header: 'Player', accessor: (r) => r.name },
     { key: 'position', header: 'Pos', accessor: (r) => r.position, align: 'center' },
     { key: 'team', header: 'Team', accessor: (r) => r.team ?? '—', align: 'center' },
-    { key: 'snapTrendLabel', header: 'Snap Share Trend', accessor: (r) => r.snapTrendLabel, sortable: false },
-    { key: 'targetTrendLabel', header: 'Target Share Trend', accessor: (r) => r.targetTrendLabel, sortable: false },
+    {
+      key: 'consensusValue',
+      header: 'Value',
+      accessor: (r) => r.consensusValue,
+      align: 'right',
+      render: (r) => (
+        <span title={r.tier}>{r.consensusValue > 0 ? r.consensusValue : <span className="text-slate-600">none</span>}</span>
+      ),
+    },
+    { key: 'snapTrendLabel', header: 'Sim. Snap Trend', accessor: (r) => r.snapTrendLabel, sortable: false },
+    { key: 'targetTrendLabel', header: 'Sim. Target Trend', accessor: (r) => r.targetTrendLabel, sortable: false },
     {
       key: 'trend',
       header: 'Trend',
@@ -105,7 +122,7 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
       align: 'center',
       render: (r) => <Badge color={r.trend === 'RISING' ? 'green' : r.trend === 'FALLING' ? 'red' : 'gray'}>{r.trend}</Badge>,
     },
-    { key: 'opportunityScore', header: 'Opportunity Score', accessor: (r) => r.opportunityScore, align: 'right' },
+    { key: 'rankScore', header: 'Rank Score', accessor: (r) => Math.round(r.rankScore), align: 'right' },
     { key: 'suggestedBid', header: 'Suggested FAAB', accessor: (r) => r.suggestedBid, align: 'right', render: (r) => `$${r.suggestedBid}` },
     {
       key: 'priority',
@@ -141,8 +158,17 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
 
   return (
     <div className="space-y-6">
+      <div className="rounded-md border border-amber-700/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+        <span className="font-semibold">Snap/target share trends here are simulated, not real.</span> Sleeper's free
+        API doesn't expose live usage stats, so the "Sim. Snap/Target Trend" and "Trend" columns are a stand-in
+        signal, not actual game data — don't treat a "RISING" badge as real preseason or in-season performance.
+        The <b>Value</b> and <b>Rank Score</b> columns (dynasty consensus + estimate) carry the majority weight in
+        ranking and priority specifically so a fabricated trend number can never rank a total unknown above a
+        real, valuable player — but always sanity-check any pickup against actual news before adding.
+      </div>
+
       <Card>
-        <CardTitle subtitle="Simulated snap/target share trend — see the note at the bottom of the page about live stats feeds.">
+        <CardTitle subtitle="FAAB budget across the league.">
           FAAB Budget Snapshot
         </CardTitle>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -157,7 +183,7 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
         <CardTitle
           subtitle={
             userId
-              ? "\"Suggested Drop\" is the weakest matching bench player on your roster — same position, or FLEX-eligible positions if your league has a FLEX spot. Hover a suggestion for why."
+              ? "\"Suggested Drop\" is the weakest matching bench player on your roster whose value doesn't clearly exceed this pickup's — same position, or FLEX-eligible positions if your league has a FLEX spot. Hover a suggestion for why."
               : 'Enter your Sleeper User ID above and reload to get personalized "who to drop" suggestions alongside each pickup.'
           }
         >
@@ -176,7 +202,7 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
             </button>
           ))}
         </div>
-        <DataTable rows={filteredRows} columns={columns} rowKey={(r) => r.playerId} defaultSortKey="opportunityScore" />
+        <DataTable rows={filteredRows} columns={columns} rowKey={(r) => r.playerId} defaultSortKey="rankScore" />
       </Card>
     </div>
   );
