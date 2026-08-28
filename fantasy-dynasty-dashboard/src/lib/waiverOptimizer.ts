@@ -67,6 +67,18 @@ export interface FaabContext {
   spentByRoster: Map<number, number>;
 }
 
+/**
+ * Blends the simulated usage trend with real dynasty value into a single
+ * 0-100 ranking score, so a known, valuable player can never be buried
+ * below a total unknown purely because that unknown's fake trend number
+ * happened to land high. Value carries the majority weight deliberately -
+ * the trend signal is fabricated (see estimateSnapTrend), real value is not.
+ */
+export function priorityScore(trend: SnapTrend, consensusValue: number): number {
+  const valueSignal = Math.min(100, consensusValue / 80);
+  return valueSignal * 0.65 + trend.opportunityScore * 0.35;
+}
+
 export function suggestFaabBid(
   player: SleeperPlayer,
   trend: SnapTrend,
@@ -78,7 +90,8 @@ export function suggestFaabBid(
     ? remainingBudgets.reduce((s, v) => s + v, 0) / remainingBudgets.length
     : ctx.startingBudget;
 
-  const valueFloor = tradeValue ? Math.min(15, tradeValue.consensusValue / 300) : 0;
+  const consensusValue = tradeValue?.consensusValue ?? 0;
+  const valueFloor = Math.min(15, consensusValue / 300);
   const opportunityFactor = trend.opportunityScore / 100;
   const trendBoost = trend.trend === 'RISING' ? 1.35 : trend.trend === 'FALLING' ? 0.6 : 1;
 
@@ -86,24 +99,30 @@ export function suggestFaabBid(
   const budgetCap = avgRemaining * 0.35; // don't suggest blowing >35% of average remaining budget
   const suggestedBid = Math.round(Math.max(0, Math.min(rawBid, budgetCap)));
 
+  // Priority now requires real value to back it up, not just simulated trend -
+  // a total unknown (no curated value, no search_rank estimate) can't reach
+  // HIGH PRIORITY on trend noise alone.
+  const score = priorityScore(trend, consensusValue);
   let priority: FaabSuggestion['priority'] = 'LOW';
-  if (trend.trend === 'RISING' && trend.opportunityScore >= 55) priority = 'HIGH PRIORITY';
-  else if (trend.opportunityScore >= 40) priority = 'MEDIUM';
-  else if (trend.opportunityScore >= 20) priority = 'LOW';
+  if (score >= 55 && trend.trend !== 'FALLING') priority = 'HIGH PRIORITY';
+  else if (score >= 35) priority = 'MEDIUM';
+  else if (score >= 15) priority = 'LOW';
   else priority = 'SPECULATIVE';
 
   const reasonParts: string[] = [];
   if (trend.trend === 'RISING') {
     reasonParts.push(
-      `Snap share ${(trend.earlySnapShare * 100).toFixed(0)}% -> ${(trend.recentSnapShare * 100).toFixed(0)}%, target share ${(trend.earlyTargetShare * 100).toFixed(0)}% -> ${(trend.recentTargetShare * 100).toFixed(0)}% (rising).`,
+      `Simulated snap share ${(trend.earlySnapShare * 100).toFixed(0)}% -> ${(trend.recentSnapShare * 100).toFixed(0)}%, target share ${(trend.earlyTargetShare * 100).toFixed(0)}% -> ${(trend.recentTargetShare * 100).toFixed(0)}% (rising).`,
     );
   } else if (trend.trend === 'FALLING') {
-    reasonParts.push('Usage trending down - lower priority add.');
+    reasonParts.push('Simulated usage trending down - lower priority add.');
   } else {
-    reasonParts.push('Usage stable week over week.');
+    reasonParts.push('Simulated usage stable week over week.');
   }
   if (tradeValue) {
     reasonParts.push(`Consensus dynasty tier: ${tradeValue.tier}.`);
+  } else {
+    reasonParts.push('No real value signal for this player - treat as speculative.');
   }
 
   return {
@@ -153,6 +172,13 @@ export function flexEligiblePositions(rosterPositions: string[]): Set<Position> 
  * make interchangeable with it. Ranks by "keepability": low dynasty value,
  * a falling usage trend, and elevated decline risk all make a player safer
  * to cut.
+ *
+ * Critically, this never suggests dropping a bench player whose real value
+ * meaningfully exceeds the pickup's own value - the simulated usage trend
+ * that ranks *which* free agent to target has zero say in that comparison,
+ * because it's fabricated data and value is not. Without this guardrail the
+ * tool could (and did) recommend cutting a proven, high-value player for a
+ * total unknown just because the unknown's fake trend number was high.
  */
 export function suggestDropCandidates(
   benchIds: string[],
@@ -160,13 +186,17 @@ export function suggestDropCandidates(
   tradeValues: Map<string, TradeValueEntry>,
   targetPosition: Position,
   rosterPositions: string[],
+  pickupValue = 0,
   limit = 2,
 ): DropCandidate[] {
   const flex = flexEligiblePositions(rosterPositions);
+  const valueBuffer = 400; // ~ one dynasty tier of slack, so a same-tier swap isn't blocked
   const eligible = benchIds.filter((id) => {
     const pos = players[id]?.position as Position | undefined;
     if (!pos) return false;
-    return pos === targetPosition || (flex.has(pos) && flex.has(targetPosition));
+    if (pos !== targetPosition && !(flex.has(pos) && flex.has(targetPosition))) return false;
+    const benchValue = resolvePlayerValue(id, players, tradeValues).consensusValue;
+    return benchValue <= pickupValue + valueBuffer;
   });
 
   const scored = eligible.map((id) => {
