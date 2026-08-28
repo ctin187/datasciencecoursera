@@ -12,18 +12,24 @@ import type {
 import { retirementRisk } from './agingCurves';
 import { resolvePlayerValue } from './playerValue';
 
-const SKILL_POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
+/** Zero/empty-initialized Record over exactly the positions this league actually rosters. */
+function zeroRecord<T>(positions: Position[], init: () => T): Record<Position, T> {
+  const record = {} as Record<Position, T>;
+  for (const pos of positions) record[pos] = init();
+  return record;
+}
 
 export function analyzeRoster(
   roster: SleeperRoster,
   ownerName: string,
   players: PlayersMap,
   tradeValues: Map<string, TradeValueEntry>,
+  activePositions: Position[],
 ): RosterAnalysis {
   const playerIds = roster.players ?? [];
   const starterSet = new Set(roster.starters ?? []);
-  const positionalAges: Record<Position, number[]> = { QB: [], RB: [], WR: [], TE: [], K: [], DEF: [] };
-  const positionalValues: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+  const positionalAges = zeroRecord<number[]>(activePositions, () => []);
+  const positionalValues = zeroRecord<number>(activePositions, () => 0);
   const retirementRiskList: RosterAnalysis['retirementRisk'] = [];
 
   let ageSum = 0;
@@ -37,7 +43,7 @@ export function analyzeRoster(
   for (const id of playerIds) {
     const p = players[id];
     if (!p) continue;
-    const pos = (SKILL_POSITIONS.includes(p.position as Position) ? p.position : null) as Position | null;
+    const pos = (activePositions.includes(p.position as Position) ? p.position : null) as Position | null;
 
     const resolved = resolvePlayerValue(id, players, tradeValues);
     if (pos) positionalValues[pos] += resolved.consensusValue;
@@ -110,8 +116,9 @@ export function phaseDescription(phase: LifecyclePhase): string {
 export function futureRosterProjection(
   positionalAges: Record<Position, number[]>,
   yearsOut: number,
+  activePositions: Position[],
 ): { position: Position; startableCount: number }[] {
-  return SKILL_POSITIONS.map((position) => {
+  return activePositions.map((position) => {
     const ages = positionalAges[position] ?? [];
     const stillStartable = ages.filter((age) => {
       const futureAge = age + yearsOut;
@@ -133,6 +140,12 @@ export function futureRosterProjection(
 // weighted score built from five independent signals so teams actually
 // differentiate, plus a human-readable `breakdown` so a grade is never a
 // black box.
+//
+// Every position-iterating step here takes `activePositions` - the set of
+// positions this specific league actually rosters (see lib/leagueFormat.ts) -
+// rather than a hardcoded QB/RB/WR/TE array, so a league that starts
+// K/DEF/IDP gets those positions counted in depth, age-curve alignment, and
+// everywhere else instead of silently ignored.
 // ---------------------------------------------------------------------------
 
 /** "Solid Starter" tier floor (see lib/consensusData.ts tierForValue) used as the bar for "quality" depth. */
@@ -160,9 +173,10 @@ export function computeLeagueGradeContext(
   rosters: SleeperRoster[],
   players: PlayersMap,
   threeDValues: Map<string, ThreeDValue>,
+  activePositions: Position[],
 ): LeagueGradeContext {
-  const ageSums: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
-  const ageCounts: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+  const ageSums = zeroRecord<number>(activePositions, () => 0);
+  const ageCounts = zeroRecord<number>(activePositions, () => 0);
   let totalProjected = 0;
 
   for (const roster of rosters) {
@@ -171,7 +185,7 @@ export function computeLeagueGradeContext(
     for (const id of roster.players ?? []) {
       const p = players[id];
       if (!p) continue;
-      const pos = SKILL_POSITIONS.includes(p.position as Position) ? (p.position as Position) : null;
+      const pos = activePositions.includes(p.position as Position) ? (p.position as Position) : null;
       if (pos && p.age) {
         ageSums[pos] += p.age;
         ageCounts[pos] += 1;
@@ -183,8 +197,8 @@ export function computeLeagueGradeContext(
     totalProjected += rosterProjected;
   }
 
-  const avgAgeByPosition = {} as Record<Position, number>;
-  (Object.keys(ageSums) as Position[]).forEach((pos) => {
+  const avgAgeByPosition = zeroRecord<number>(activePositions, () => 0);
+  activePositions.forEach((pos) => {
     avgAgeByPosition[pos] = ageCounts[pos] ? ageSums[pos] / ageCounts[pos] : 0;
   });
 
@@ -201,10 +215,11 @@ export function gradeRoster(
   tradeValues: Map<string, TradeValueEntry>,
   threeDValues: Map<string, ThreeDValue>,
   context: LeagueGradeContext,
+  activePositions: Position[],
 ): TeamGrade {
   const starterSet = new Set((roster.starters ?? []).filter((id) => id !== '0'));
-  const positionalAges: Record<Position, number[]> = { QB: [], RB: [], WR: [], TE: [], K: [], DEF: [] };
-  const qualityCountByPos: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+  const positionalAges = zeroRecord<number[]>(activePositions, () => []);
+  const qualityCountByPos = zeroRecord<number>(activePositions, () => 0);
 
   let eliteAgingCount = 0;
   let youngAssetCount = 0;
@@ -215,7 +230,7 @@ export function gradeRoster(
   for (const id of roster.players ?? []) {
     const p = players[id];
     if (!p) continue;
-    const pos = SKILL_POSITIONS.includes(p.position as Position) ? (p.position as Position) : null;
+    const pos = activePositions.includes(p.position as Position) ? (p.position as Position) : null;
     const resolved = resolvePlayerValue(id, players, tradeValues);
 
     if (pos && p.age) {
@@ -250,7 +265,7 @@ export function gradeRoster(
 
   // B. Age curve alignment (20%) - baseline 70 so a young roster can earn a bonus above it.
   let ageCurveScore = 70;
-  for (const pos of SKILL_POSITIONS) {
+  for (const pos of activePositions) {
     const ages = positionalAges[pos];
     if (ages.length === 0) continue;
     const avg = ages.reduce((s, a) => s + a, 0) / ages.length;
@@ -262,10 +277,10 @@ export function gradeRoster(
   breakdown.push(`Age curve alignment: baseline 70, ±10 per position vs. league avg age = ${ageCurveScore.toFixed(1)}`);
 
   // C. Positional depth (25%) - 0 quality players at a position = 0, 1 = 40, 2+ = 80-100.
-  const depthComponents = SKILL_POSITIONS.map((pos) => Math.min(100, qualityCountByPos[pos] * 40));
+  const depthComponents = activePositions.map((pos) => Math.min(100, qualityCountByPos[pos] * 40));
   const depthScore = clamp0to100(depthComponents.reduce((s, v) => s + v, 0) / depthComponents.length);
   breakdown.push(
-    `Positional depth: QB ${qualityCountByPos.QB}, RB ${qualityCountByPos.RB}, WR ${qualityCountByPos.WR}, TE ${qualityCountByPos.TE} quality (Tier ≤4) players = ${depthScore.toFixed(1)}`,
+    `Positional depth: ${activePositions.map((pos) => `${pos} ${qualityCountByPos[pos]}`).join(', ')} quality (Tier ≤4) players = ${depthScore.toFixed(1)}`,
   );
 
   // D. Injury risk (15%, inverted so higher = safer roster)
@@ -290,7 +305,7 @@ export function gradeRoster(
     `Overall = (${contentionScore.toFixed(1)}×0.25) + (${ageCurveScore.toFixed(1)}×0.20) + (${depthScore.toFixed(1)}×0.25) + (${injuryRiskScore.toFixed(1)}×0.15) + (${projectedPointsScore.toFixed(1)}×0.15) = ${overall.toFixed(1)} (${letterForScore(overall)})`,
   );
 
-  const allAges = SKILL_POSITIONS.flatMap((p) => positionalAges[p]);
+  const allAges = activePositions.flatMap((p) => positionalAges[p]);
   const avgAge = allAges.length ? allAges.reduce((s, a) => s + a, 0) / allAges.length : 0;
 
   const winNowGrade = clamp0to100(eliteAgingCount * 20 + projectedPointsScore * 0.5 + (avgAge >= 26 ? 10 : 0));
@@ -321,9 +336,10 @@ export function gradeLeague(
   players: PlayersMap,
   tradeValues: Map<string, TradeValueEntry>,
   threeDValues: Map<string, ThreeDValue>,
+  activePositions: Position[],
 ): TeamGrade[] {
-  const context = computeLeagueGradeContext(rosters, players, threeDValues);
+  const context = computeLeagueGradeContext(rosters, players, threeDValues, activePositions);
   return rosters
-    .map((r) => gradeRoster(r, ownerNameFor(r.roster_id), players, tradeValues, threeDValues, context))
+    .map((r) => gradeRoster(r, ownerNameFor(r.roster_id), players, tradeValues, threeDValues, context, activePositions))
     .sort((a, b) => b.overall - a.overall);
 }

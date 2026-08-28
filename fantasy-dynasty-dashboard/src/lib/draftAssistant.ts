@@ -88,8 +88,8 @@ export function positionalScarcity(
   adpRows: ConsensusADP[],
   values: Map<string, ThreeDValue>,
   draftedPlayerIds: Set<string>,
+  positions: Position[] = ['QB', 'RB', 'WR', 'TE'],
 ): PositionalScarcity[] {
-  const positions: Position[] = ['QB', 'RB', 'WR', 'TE'];
   return positions.map((position) => {
     const tiers = buildTiers(adpRows, values, position);
     const startQualityTiers = tiers.slice(0, 3);

@@ -1,6 +1,7 @@
 import type { DropCandidate, FaabSuggestion, PlayersMap, Position, SleeperPlayer, SleeperRoster, TradeValueEntry } from '../types';
 import { retirementRisk } from './agingCurves';
 import { resolvePlayerValue } from './playerValue';
+import { detectLeagueFormat, type LeagueFormat } from './leagueFormat';
 
 /**
  * Deterministic pseudo-random generator seeded by player_id, so the same
@@ -145,25 +146,22 @@ export function benchPlayerIds(roster: SleeperRoster): string[] {
 }
 
 /**
- * Positions a league's plain FLEX spot makes interchangeable, inferred from
- * roster_positions (e.g. Sleeper's 'FLEX', 'WRRB_FLEX', 'REC_FLEX'). Used so a
- * drop suggestion never crosses positions the league itself wouldn't.
+ * Whether two positions are interchangeable under this league's own FLEX
+ * rules (offense RB/WR/TE flex, or IDP DL/LB/DB flex, per
+ * lib/leagueFormat.ts) - checked as "both positions belong to the *same*
+ * flex group", not just "both belong to *some* flex group", so an offense
+ * FLEX and an IDP_FLEX never bleed into each other.
  *
- * Deliberately does NOT fold SUPER_FLEX's QB eligibility into this set: a
- * superflex *lineup slot* can hold a QB, but that doesn't mean a QB pickup
- * and a bench WR are equivalent roster-value trade-offs, and suggesting
- * "drop your WR for this QB" is a much bigger call than a same-tier flex
- * swap. QB targets only match other bench QBs.
+ * Deliberately does NOT fold SUPER_FLEX's QB eligibility into the offense
+ * group: a superflex *lineup slot* can hold a QB, but that doesn't mean a QB
+ * pickup and a bench WR are equivalent roster-value trade-offs, and
+ * suggesting "drop your WR for this QB" is a much bigger call than a
+ * same-tier flex swap. QB targets only match other bench QBs.
  */
-export function flexEligiblePositions(rosterPositions: string[]): Set<Position> {
-  const flex = new Set<Position>();
-  const upper = rosterPositions.map((p) => p.toUpperCase());
-  if (upper.some((p) => p.includes('FLEX') && !p.includes('SUPER'))) {
-    flex.add('RB');
-    flex.add('WR');
-    flex.add('TE');
-  }
-  return flex;
+function sameFlexGroup(format: LeagueFormat, a: Position, b: Position): boolean {
+  if (format.offenseFlexPositions.has(a) && format.offenseFlexPositions.has(b)) return true;
+  if (format.idpFlexPositions.has(a) && format.idpFlexPositions.has(b)) return true;
+  return false;
 }
 
 /**
@@ -189,12 +187,12 @@ export function suggestDropCandidates(
   pickupValue = 0,
   limit = 2,
 ): DropCandidate[] {
-  const flex = flexEligiblePositions(rosterPositions);
+  const format = detectLeagueFormat(rosterPositions);
   const valueBuffer = 400; // ~ one dynasty tier of slack, so a same-tier swap isn't blocked
   const eligible = benchIds.filter((id) => {
     const pos = players[id]?.position as Position | undefined;
     if (!pos) return false;
-    if (pos !== targetPosition && !(flex.has(pos) && flex.has(targetPosition))) return false;
+    if (pos !== targetPosition && !sameFlexGroup(format, pos, targetPosition)) return false;
     const benchValue = resolvePlayerValue(id, players, tradeValues).consensusValue;
     return benchValue <= pickupValue + valueBuffer;
   });

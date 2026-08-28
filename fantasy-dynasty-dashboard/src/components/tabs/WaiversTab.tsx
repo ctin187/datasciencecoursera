@@ -15,6 +15,7 @@ import {
   suggestFaabBid,
 } from '../../lib/waiverOptimizer';
 import { resolvePlayerValue } from '../../lib/playerValue';
+import { detectLeagueFormat } from '../../lib/leagueFormat';
 import type { DropCandidate } from '../../types';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
@@ -39,6 +40,7 @@ interface WaiverRow {
 }
 
 export function WaiversTab({ data, derived, userId }: { data: LeagueData; derived: Derived; userId: string }) {
+  const format = useMemo(() => detectLeagueFormat(data.league.roster_positions), [data.league.roster_positions]);
   const [posFilter, setPosFilter] = useState<Position | 'ALL'>('ALL');
   const startingBudget = data.league.settings.waiver_budget ?? 100;
 
@@ -51,12 +53,16 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
   const freeAgents = useMemo(() => {
     return Object.values(data.players).filter((p) => {
       if (rostered.has(p.player_id)) return false;
-      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) return false;
+      // Only surface positions this league actually rosters - a standard
+      // league won't show IDP/K/DEF noise, but a league that starts them
+      // (per roster_positions) sees them here instead of them being
+      // silently excluded regardless of format.
+      if (!format.activePositions.includes(p.position as Position)) return false;
       if (p.status !== 'Active') return false;
       // Cap the pool: only players with a known team and reasonable depth chart slot are worth surfacing.
       return !!p.team;
     });
-  }, [data.players, rostered]);
+  }, [data.players, rostered, format.activePositions]);
 
   const rows: WaiverRow[] = useMemo(() => {
     return freeAgents
@@ -190,7 +196,7 @@ export function WaiversTab({ data, derived, userId }: { data: LeagueData; derive
           Waiver Wire Optimizer
         </CardTitle>
         <div className="mb-3 flex flex-wrap gap-1.5">
-          {(['ALL', 'QB', 'RB', 'WR', 'TE'] as const).map((p) => (
+          {(['ALL', ...format.activePositions] as (Position | 'ALL')[]).map((p) => (
             <button
               key={p}
               onClick={() => setPosFilter(p)}

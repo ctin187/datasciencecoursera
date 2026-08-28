@@ -68,6 +68,38 @@ export const AGING_CURVES: Record<Position, AgingCurveModel> = {
     cliffAge: 99,
     breakoutFloor: 0,
   },
+  // IDP curves: directional approximations in the same spirit as the skill-
+  // position models above, not a fitted regression. DL/edge rushers and LBs
+  // decline a bit like RBs (contact-heavy, workload attrition) but with a
+  // longer runway; DBs lean on speed and tend to decline earliest among the
+  // three, similar to WR/RB blend.
+  DL: {
+    position: 'DL',
+    peakStart: 26,
+    peakEnd: 29,
+    declineStartRate: 0.04,
+    declineLateRate: 0.1,
+    cliffAge: 32,
+    breakoutFloor: 23,
+  },
+  LB: {
+    position: 'LB',
+    peakStart: 25,
+    peakEnd: 28,
+    declineStartRate: 0.04,
+    declineLateRate: 0.1,
+    cliffAge: 31,
+    breakoutFloor: 22,
+  },
+  DB: {
+    position: 'DB',
+    peakStart: 25,
+    peakEnd: 27,
+    declineStartRate: 0.045,
+    declineLateRate: 0.11,
+    cliffAge: 30,
+    breakoutFloor: 22,
+  },
 };
 
 function normalizePosition(position: string): Position {

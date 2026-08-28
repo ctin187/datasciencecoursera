@@ -1,7 +1,7 @@
 import type { PlayersMap, Position, ResolvedPlayerValue, TradeValueEntry } from '../types';
 import { tierForValue } from './consensusData';
 
-const SKILL_POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
+const KNOWN_POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'];
 
 /**
  * The curated seed dataset (src/data/consensusPlayers.ts) only covers ~130
@@ -23,7 +23,27 @@ const SKILL_POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
  */
 function estimateValueFromSearchRank(searchRank: number | null | undefined, position: Position): number {
   if (!searchRank || searchRank <= 0 || searchRank > 6000) return 0;
-  const base = position === 'QB' ? 3200 : position === 'RB' || position === 'WR' ? 3000 : position === 'TE' ? 2600 : 900;
+  // K/DEF genuinely carry minimal dynasty trade value in the real market -
+  // mainstream consensus sources (KTC, FantasyPros dynasty rankings) barely
+  // rank them at all, so a low base here matches reality, not a shortcut.
+  // IDP (DL/LB/DB) has real dynasty value in IDP-format leagues, generally
+  // lower than offensive skill positions.
+  const base =
+    position === 'QB'
+      ? 3200
+      : position === 'RB' || position === 'WR'
+        ? 3000
+        : position === 'TE'
+          ? 2600
+          : position === 'LB'
+            ? 1600
+            : position === 'DL'
+              ? 1500
+              : position === 'DB'
+                ? 1400
+                : position === 'K' || position === 'DEF'
+                  ? 500
+                  : 900;
   const decay = base / Math.pow(1 + searchRank / 150, 0.9);
   return Math.max(0, Math.round(decay));
 }
@@ -79,7 +99,11 @@ export function resolvePlayerValue(
     };
   }
 
-  const pos: Position = SKILL_POSITIONS.includes(p.position as Position) ? (p.position as Position) : 'WR';
+  // Previously forced any non-QB/RB/WR/TE player (kickers, team defenses,
+  // every IDP player) to 'WR' here - wrong position, wrong aging curve,
+  // wrong estimate base. Now only truly unrecognized position strings
+  // (e.g. FB/LS/P, which no fantasy league starts) fall back to WR.
+  const pos: Position = KNOWN_POSITIONS.includes(p.position as Position) ? (p.position as Position) : 'WR';
   const estimated = estimateValueFromSearchRank(p.search_rank, pos);
 
   return {

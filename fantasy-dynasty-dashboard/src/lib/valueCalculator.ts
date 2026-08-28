@@ -16,6 +16,9 @@ const POSITION_BASE: Record<Position, number> = {
   TE: 220,
   K: 140,
   DEF: 130,
+  DL: 200,
+  LB: 220,
+  DB: 190,
 };
 
 function baselineProjection(position: Position, consensusAdpRank: number): number {
