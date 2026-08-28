@@ -73,6 +73,10 @@ export interface SleeperDraft {
     [key: string]: number | undefined;
   };
   season: string;
+  /** user_id -> draft slot (1-indexed). Sleeper's per-user pick order. */
+  draft_order?: Record<string, number> | null;
+  /** draft slot (1-indexed, as string keys) -> roster_id. */
+  slot_to_roster_id?: Record<string, number> | null;
 }
 
 export interface SleeperDraftPick {
@@ -216,6 +220,24 @@ export interface DropCandidate {
   name: string;
   position: Position;
   reason: string;
+}
+
+export type LetterGrade = 'A' | 'B' | 'C' | 'D' | 'F';
+
+export interface TeamGrade {
+  rosterId: number;
+  ownerName: string;
+  contentionScore: number; // 0-100, weight 25%
+  ageCurveScore: number; // 0-100, weight 20%
+  depthScore: number; // 0-100, weight 25%
+  injuryRiskScore: number; // 0-100 (higher = safer), weight 15%
+  projectedPointsScore: number; // 0-100, weight 15%
+  overall: number; // 0-100 weighted blend
+  letter: LetterGrade;
+  winNowGrade: number; // 0-100
+  rebuildGrade: number; // 0-100
+  longevityScore: number; // 0-100
+  breakdown: string[]; // human-readable line items showing the math
 }
 
 export interface FaabSuggestion {

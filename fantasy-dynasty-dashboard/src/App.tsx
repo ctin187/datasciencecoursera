@@ -26,7 +26,7 @@ export default function App() {
   const [activeUserId, setActiveUserId] = useState<string>('');
   const [tab, setTab] = useState<TabId>('league');
 
-  const { data, loading, error, progress } = useLeagueData(activeLeagueId);
+  const { data, loading, error, progress, refreshRosters, refreshingRosters } = useLeagueData(activeLeagueId);
   const derived = useDerivedData(data?.players);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -129,8 +129,10 @@ export default function App() {
               </div>
             )}
             {tab === 'league' && <LeagueSettingsTab data={data} userId={activeUserId} tradeValueMap={derived.tradeValueMap} />}
-            {tab === 'draft' && <DraftAssistantTab derived={derived} />}
-            {tab === 'trade' && <TradeAnalyzerTab data={data} derived={derived} />}
+            {tab === 'draft' && <DraftAssistantTab data={data} derived={derived} userId={activeUserId} />}
+            {tab === 'trade' && (
+              <TradeAnalyzerTab data={data} derived={derived} onRefreshRosters={refreshRosters} refreshingRosters={refreshingRosters} />
+            )}
             {tab === 'waivers' && <WaiversTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'aging' && <AgingCurvesTab derived={derived} />}
             {tab === 'roster' && <RosterHealthTab data={data} derived={derived} userId={activeUserId} />}
