@@ -17,6 +17,7 @@ import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
 import { ageMultiplier, AGING_CURVES } from '../../lib/agingCurves';
 import { resolvePlayerValue } from '../../lib/playerValue';
+import { detectLeagueFormat } from '../../lib/leagueFormat';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
 
@@ -26,14 +27,17 @@ const POSITION_COLORS: Record<Position, string> = {
   WR: '#a78bfa',
   TE: '#34d399',
   K: '#64748b',
-  DEF: '#64748b',
+  DEF: '#94a3b8',
+  DL: '#f472b6',
+  LB: '#facc15',
+  DB: '#2dd4bf',
 };
 
-function buildCurveData() {
+function buildCurveData(positions: Position[]) {
   const ages = Array.from({ length: 40 - 20 + 1 }, (_, i) => 20 + i);
   return ages.map((age) => {
     const row: Record<string, number> = { age };
-    (['QB', 'RB', 'WR', 'TE'] as Position[]).forEach((pos) => {
+    positions.forEach((pos) => {
       row[pos] = Math.round(ageMultiplier(pos, age) * 100);
     });
     return row;
@@ -50,26 +54,29 @@ interface SellHighRow {
 }
 
 export function AgingCurvesTab({ data, derived }: { data: LeagueData; derived: Derived }) {
-  const curveData = useMemo(buildCurveData, []);
+  const format = useMemo(() => detectLeagueFormat(data.league.roster_positions), [data.league.roster_positions]);
+  const curveData = useMemo(() => buildCurveData(format.activePositions), [format.activePositions]);
   const [lookupQuery, setLookupQuery] = useState('');
 
-  // Searches every live Sleeper player, not just the curated ~130-player seed
-  // dataset - a curated player still gets exact age-curve data, a non-curated
-  // one gets the position's generic curve (age-based, not player-specific)
-  // but no multi-year points chart, since that needs an ADP rank to project from.
+  // Searches every live Sleeper player at any position this league actually
+  // rosters (not just QB/RB/WR/TE - a league starting K/DEF/IDP should be
+  // able to look those players up too). A curated player still gets exact
+  // age-curve data, a non-curated one gets the position's generic curve
+  // (age-based, not player-specific) but no multi-year points chart, since
+  // that needs an ADP rank to project from.
   const matches = useMemo(() => {
     const q = lookupQuery.trim().toLowerCase();
     if (!q) return [];
     const results: { playerId: string; name: string; position: Position; age: number | null }[] = [];
     for (const p of Object.values(data.players)) {
       if (results.length >= 8) break;
-      if (!['QB', 'RB', 'WR', 'TE'].includes(p.position)) continue;
+      if (!format.activePositions.includes(p.position as Position)) continue;
       const full = (p.full_name || `${p.first_name} ${p.last_name}`).toLowerCase();
       if (!full.includes(q)) continue;
       results.push({ playerId: p.player_id, name: p.full_name || `${p.first_name} ${p.last_name}`, position: p.position as Position, age: p.age });
     }
     return results;
-  }, [lookupQuery, data.players]);
+  }, [lookupQuery, data.players, format.activePositions]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId ? resolvePlayerValue(selectedId, data.players, derived.tradeValueMap) : null;
@@ -129,9 +136,11 @@ export function AgingCurvesTab({ data, derived }: { data: LeagueData; derived: D
               <YAxis stroke="#64748b" fontSize={12} domain={[0, 105]} />
               <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              {(['QB', 'RB', 'WR', 'TE'] as Position[]).map((pos) => (
-                <Line key={pos} type="monotone" dataKey={pos} stroke={POSITION_COLORS[pos]} dot={false} strokeWidth={2} />
-              ))}
+              {format.activePositions
+                .filter((pos) => pos !== 'DEF') // team defenses have no individual age curve - a flat line adds nothing
+                .map((pos) => (
+                  <Line key={pos} type="monotone" dataKey={pos} stroke={POSITION_COLORS[pos]} dot={false} strokeWidth={2} />
+                ))}
             </LineChart>
           </ResponsiveContainer>
         </div>

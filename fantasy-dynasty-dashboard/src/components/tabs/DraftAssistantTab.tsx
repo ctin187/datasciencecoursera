@@ -6,9 +6,11 @@ import type { Position } from '../../types';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
-import { adpValueRank, classifySleeperReach } from '../../lib/valueCalculator';
+import { adpValueRank, classifySleeperReach, computeThreeDValuesForPool } from '../../lib/valueCalculator';
 import { buildTiers, positionalScarcity, tierBreakpointInfo } from '../../lib/draftAssistant';
+import { buildEstimatedAdpRows } from '../../lib/consensusData';
 import { peakAgeRange } from '../../lib/agingCurves';
+import { detectLeagueFormat } from '../../lib/leagueFormat';
 import {
   computeDraftProgress,
   estimateSecondsPerPick,
@@ -34,14 +36,32 @@ interface DraftRow {
   status: 'SLEEPER' | 'REACH' | 'FAIR';
   blendedValue: number;
   tier: string;
+  isEstimated: boolean;
   isTierBreakpoint: boolean;
 }
 
-const POSITIONS: (Position | 'ALL')[] = ['ALL', 'QB', 'RB', 'WR', 'TE'];
-
 export function DraftAssistantTab({ data, derived, userId }: { data: LeagueData; derived: Derived; userId: string }) {
+  const format = useMemo(() => detectLeagueFormat(data.league.roster_positions), [data.league.roster_positions]);
   const [posFilter, setPosFilter] = useState<Position | 'ALL'>('ALL');
-  const { consensusAdp, threeDValues } = derived;
+  const POSITIONS = useMemo(() => ['ALL', ...format.activePositions] as (Position | 'ALL')[], [format.activePositions]);
+
+  // The curated seed dataset is offense-skill-position-only by design (see
+  // data/consensusPlayers.ts) - no maintained public consensus exists for
+  // K/DEF/IDP the way it does for QB/RB/WR/TE. For a league that starts
+  // those positions, synthesize estimated rows (search_rank-based, same
+  // system as everywhere else in the app) rather than silently leaving them
+  // off the board entirely.
+  const extraPositions = useMemo(
+    () => format.activePositions.filter((p) => !['QB', 'RB', 'WR', 'TE'].includes(p)),
+    [format.activePositions],
+  );
+  const estimatedRows = useMemo(
+    () => buildEstimatedAdpRows(data.players, extraPositions, derived.consensusAdp.length + 1),
+    [data.players, extraPositions, derived.consensusAdp.length],
+  );
+  const estimatedIds = useMemo(() => new Set(estimatedRows.map((r) => r.playerId)), [estimatedRows]);
+  const consensusAdp = useMemo(() => [...derived.consensusAdp, ...estimatedRows], [derived.consensusAdp, estimatedRows]);
+  const threeDValues = useMemo(() => computeThreeDValuesForPool(consensusAdp), [consensusAdp]);
 
   const activeDraft = useMemo(() => findRelevantDraft(data.drafts), [data.drafts]);
   const live = useLiveDraft(activeDraft, true);
@@ -50,8 +70,8 @@ export function DraftAssistantTab({ data, derived, userId }: { data: LeagueData;
   const { valueRank, adpRank } = useMemo(() => adpValueRank(consensusAdp, threeDValues), [consensusAdp, threeDValues]);
   const tiersAll = useMemo(() => buildTiers(consensusAdp, threeDValues, 'ALL'), [consensusAdp, threeDValues]);
   const scarcity = useMemo(
-    () => positionalScarcity(consensusAdp, threeDValues, draftIsLive ? live.draftedIds : new Set()),
-    [consensusAdp, threeDValues, draftIsLive, live.draftedIds],
+    () => positionalScarcity(consensusAdp, threeDValues, draftIsLive ? live.draftedIds : new Set(), format.activePositions),
+    [consensusAdp, threeDValues, draftIsLive, live.draftedIds, format.activePositions],
   );
 
   const userById = useMemo(() => new Map(data.users.map((u) => [u.user_id, u])), [data.users]);
@@ -131,10 +151,11 @@ export function DraftAssistantTab({ data, derived, userId }: { data: LeagueData;
           status: classifySleeperReach(aRank, vRank),
           blendedValue: v?.blendedValue ?? 0,
           tier: tierEntry?.tier ?? breakpoint?.tier.tier ?? '—',
+          isEstimated: estimatedIds.has(p.playerId),
           isTierBreakpoint: breakpoint?.isLastInTier ?? false,
         };
       }),
-    [consensusAdp, threeDValues, adpRank, valueRank, tiersAll, derived.tradeValueMap],
+    [consensusAdp, threeDValues, adpRank, valueRank, tiersAll, derived.tradeValueMap, estimatedIds],
   );
 
   // While live: drop drafted players from the board, except the most recent
@@ -153,6 +174,11 @@ export function DraftAssistantTab({ data, derived, userId }: { data: LeagueData;
           <div className={`flex items-center gap-1.5 ${justDrafted ? 'opacity-50' : ''}`}>
             <span className="font-medium">{r.name}</span>
             {justDrafted && <Badge color="red">DRAFTED</Badge>}
+            {r.isEstimated && !justDrafted && (
+              <Badge color="gray" title="No curated ADP consensus for this position - estimated from Sleeper's own relevance ranking.">
+                Est.
+              </Badge>
+            )}
             {r.isTierBreakpoint && !justDrafted && <Badge color="yellow">last in tier</Badge>}
           </div>
         );
@@ -237,7 +263,14 @@ export function DraftAssistantTab({ data, derived, userId }: { data: LeagueData;
       )}
 
       <Card>
-        <CardTitle subtitle="Positive 3D-value ranks better than ADP => sleeper. Worse => reach.">
+        <CardTitle
+          subtitle={
+            'Positive 3D-value ranks better than ADP => sleeper. Worse => reach.' +
+            (extraPositions.length > 0
+              ? ` "Est." players (${extraPositions.join('/')}) have no curated dynasty ADP consensus anywhere - ranked by Sleeper's own relevance signal instead.`
+              : '')
+          }
+        >
           Startup Draft Board — ADP vs. 3D Value
           {draftIsLive && <span className="ml-2 font-normal text-emerald-400">(drafted players auto-removed)</span>}
         </CardTitle>
@@ -284,10 +317,12 @@ export function DraftAssistantTab({ data, derived, userId }: { data: LeagueData;
           Age-Based Recommendations
         </CardTitle>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(['QB', 'RB', 'WR', 'TE'] as Position[]).map((pos) => {
-            const { start, end } = peakAgeRange(pos);
-            return <StatTile key={pos} label={pos} value={`Peak ${start}-${end}`} />;
-          })}
+          {format.activePositions
+            .filter((pos) => pos !== 'DEF')
+            .map((pos) => {
+              const { start, end } = peakAgeRange(pos);
+              return <StatTile key={pos} label={pos} value={`Peak ${start}-${end}`} />;
+            })}
         </div>
       </Card>
     </div>

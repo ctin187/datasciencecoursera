@@ -59,7 +59,7 @@ function TradeSideEditor({
     const results: { playerId: string; name: string; position: string; team: string | null; age: number | null; tier: string }[] = [];
     for (const p of Object.values(players)) {
       if (results.length >= 25) break;
-      if (!['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(p.position)) continue;
+      if (!['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'].includes(p.position)) continue;
       const full = p.full_name || `${p.first_name} ${p.last_name}`;
       const haystack = `${full} ${p.player_id} ${p.position} ${p.team ?? ''} ${p.status}`.toLowerCase();
       if (!haystack.includes(q)) continue;

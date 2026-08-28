@@ -2,7 +2,11 @@
 // Core domain types for the Fantasy Football Dynasty League Dashboard
 // ---------------------------------------------------------------------------
 
-export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
+export type OffensivePosition = 'QB' | 'RB' | 'WR' | 'TE';
+export type SpecialTeamsPosition = 'K' | 'DEF';
+/** Sleeper's standard IDP granularity - individual defensive players are typed to one of these three summary positions. */
+export type IdpPosition = 'DL' | 'LB' | 'DB';
+export type Position = OffensivePosition | SpecialTeamsPosition | IdpPosition;
 
 export interface SleeperLeague {
   league_id: string;

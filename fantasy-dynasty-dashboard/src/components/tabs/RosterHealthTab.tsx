@@ -8,6 +8,7 @@ import { Badge } from '../ui/Badge';
 import { analyzeRoster, futureRosterProjection, gradeLeague, phaseDescription } from '../../lib/rosterAnalyzer';
 import { retirementRisk } from '../../lib/agingCurves';
 import { resolvePlayerValue } from '../../lib/playerValue';
+import { detectLeagueFormat } from '../../lib/leagueFormat';
 import type { LetterGrade } from '../../types';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
@@ -42,6 +43,7 @@ interface RosterPlayerRow {
 }
 
 export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; derived: Derived; userId: string }) {
+  const format = useMemo(() => detectLeagueFormat(data.league.roster_positions), [data.league.roster_positions]);
   const userById = new Map(data.users.map((u) => [u.user_id, u]));
   const rosterOptions = data.rosters.map((r) => ({
     id: r.roster_id,
@@ -55,8 +57,16 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
   const [showCalc, setShowCalc] = useState(false);
 
   const grades = useMemo(
-    () => gradeLeague(data.rosters, (id) => nameById.get(id) ?? `Roster ${id}`, data.players, derived.tradeValueMap, derived.threeDValues),
-    [data.rosters, data.players, derived.tradeValueMap, derived.threeDValues, nameById],
+    () =>
+      gradeLeague(
+        data.rosters,
+        (id) => nameById.get(id) ?? `Roster ${id}`,
+        data.players,
+        derived.tradeValueMap,
+        derived.threeDValues,
+        format.activePositions,
+      ),
+    [data.rosters, data.players, derived.tradeValueMap, derived.threeDValues, nameById, format.activePositions],
   );
   const gradeByRoster = useMemo(() => new Map(grades.map((g) => [g.rosterId, g])), [grades]);
   const selectedGrade = selectedId !== null ? gradeByRoster.get(selectedId) : undefined;
@@ -66,17 +76,17 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
 
   const analysis = useMemo(() => {
     if (!roster) return null;
-    return analyzeRoster(roster, ownerName, data.players, derived.tradeValueMap);
-  }, [roster, ownerName, data.players, derived.tradeValueMap]);
+    return analyzeRoster(roster, ownerName, data.players, derived.tradeValueMap, format.activePositions);
+  }, [roster, ownerName, data.players, derived.tradeValueMap, format.activePositions]);
 
   const futureProjections = useMemo(() => {
     if (!analysis) return [];
     return [1, 2, 3].map((yearsOut) => ({
       yearsOut,
       season: Number(data.league.season) + yearsOut,
-      positions: futureRosterProjection(analysis.positionalAges, yearsOut),
+      positions: futureRosterProjection(analysis.positionalAges, yearsOut, format.activePositions),
     }));
-  }, [analysis, data.league.season]);
+  }, [analysis, data.league.season, format.activePositions]);
 
   const rosterRows: RosterPlayerRow[] = useMemo(() => {
     if (!roster) return [];
@@ -260,7 +270,7 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
               <StatTile label="Total Value" value={analysis.totalValue} />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {(['QB', 'RB', 'WR', 'TE'] as Position[]).map((pos) => (
+              {format.activePositions.map((pos) => (
                 <StatTile key={pos} label={`${pos} Value`} value={analysis.positionalValues[pos]} />
               ))}
             </div>
@@ -269,7 +279,7 @@ export function RosterHealthTab({ data, derived, userId }: { data: LeagueData; d
           <Card>
             <CardTitle subtitle="Average age of rostered players at each position.">Roster Age Curve</CardTitle>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {(['QB', 'RB', 'WR', 'TE'] as Position[]).map((pos) => {
+              {format.activePositions.map((pos) => {
                 const ages = analysis.positionalAges[pos];
                 const avg = ages.length ? (ages.reduce((s, a) => s + a, 0) / ages.length).toFixed(1) : '—';
                 return <StatTile key={pos} label={pos} value={avg} hint={`${ages.length} rostered`} />;

@@ -11,10 +11,19 @@ const COLORS: Record<string, string> = {
   gray: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
 };
 
-export function Badge({ children, color = 'gray' }: { children: ReactNode; color?: keyof typeof COLORS }) {
+export function Badge({
+  children,
+  color = 'gray',
+  title,
+}: {
+  children: ReactNode;
+  color?: keyof typeof COLORS;
+  title?: string;
+}) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${COLORS[color]}`}
+      title={title}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${COLORS[color]} ${title ? 'cursor-help' : ''}`}
     >
       {children}
     </span>
