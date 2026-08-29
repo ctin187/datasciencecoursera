@@ -11,7 +11,7 @@ import { detectLeagueFormat } from '../../lib/leagueFormat';
 import type { LetterGrade } from '../../types';
 
 type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
-type TabId = 'home' | 'draft' | 'trade' | 'waivers' | 'lineup' | 'roster' | 'aging' | 'league';
+type TabId = 'home' | 'draft' | 'trade' | 'waivers' | 'lineup' | 'news' | 'roster' | 'aging' | 'league';
 
 const GRADE_COLOR: Record<LetterGrade, 'greenDark' | 'green' | 'yellow' | 'orange' | 'red'> = {
   A: 'greenDark',

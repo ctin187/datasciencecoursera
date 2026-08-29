@@ -1,5 +1,44 @@
 @import "tailwindcss";
 
+/*
+ * "NFL Front Office" theme: overrides Tailwind's default slate/violet color
+ * scales rather than rewriting className strings across every component -
+ * every existing bg-slate-900, text-slate-400, bg-violet-600, etc. utility
+ * everywhere in the app now resolves to this palette automatically.
+ *
+ * slate  -> dark navy/charcoal base (spec: navy #0a0e27, charcoal #1a2332, silver #e8e8e8)
+ * violet -> gold accent (spec: #c8b896), split across a deeper bronze-gold
+ *           for solid button fills (better contrast with white text) and
+ *           the lighter spec gold for borders/highlights/hover states.
+ */
+@theme {
+  --color-slate-50: #ffffff;
+  --color-slate-100: #f3f4f6;
+  --color-slate-200: #e8e8e8;
+  --color-slate-300: #c7ccdc;
+  --color-slate-400: #a3aac2;
+  --color-slate-500: #8087a0;
+  --color-slate-600: #4b5670;
+  --color-slate-700: #2a3548;
+  --color-slate-800: #1a2332;
+  --color-slate-900: #131a30;
+  --color-slate-950: #0a0e27;
+
+  --color-violet-100: #f7f4ec;
+  --color-violet-200: #f0ebdd;
+  --color-violet-300: #e6ddc8;
+  --color-violet-400: #d9cdb0;
+  --color-violet-500: #c8b896;
+  --color-violet-600: #a3853f;
+  --color-violet-700: #7a632a;
+  --color-violet-800: #5c4a20;
+  --color-violet-900: #3d3015;
+  --color-violet-950: #241d0a;
+
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+}
+
 :root {
   color-scheme: dark;
 }
@@ -10,9 +49,9 @@ html, body, #root {
 
 body {
   margin: 0;
-  background: #0b0f1a;
-  color: #e5e7eb;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-slate-950);
+  color: var(--color-slate-100);
+  font-family: var(--font-sans);
 }
 
 ::-webkit-scrollbar {
@@ -20,7 +59,7 @@ body {
   width: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #374151;
+  background: var(--color-slate-700);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-track {
