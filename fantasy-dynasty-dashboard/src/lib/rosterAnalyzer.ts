@@ -312,6 +312,8 @@ export function gradeRoster(
   const rebuildGrade = clamp0to100(youngAssetCount * 15 + injuryRiskScore * 0.2 + (avgAge <= 25 ? 15 : 0) + depthScore * 0.2);
   const longevityScore = clamp0to100(ageCurveScore * 0.5 + rebuildGrade * 0.3 + depthScore * 0.2);
 
+  console.debug('[rosterAnalyzer] gradeRoster', { rosterId: roster.roster_id, ownerName, overall: overall.toFixed(1), letter: letterForScore(overall) });
+
   return {
     rosterId: roster.roster_id,
     ownerName,

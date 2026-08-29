@@ -223,8 +223,17 @@ export function suggestDropCandidates(
     return { candidate, keepScore };
   });
 
-  return scored
+  const result = scored
     .sort((a, b) => a.keepScore - b.keepScore)
     .slice(0, limit)
     .map((s) => s.candidate);
+
+  console.debug('[waiverOptimizer] suggestDropCandidates', {
+    targetPosition,
+    pickupValue,
+    eligibleCount: eligible.length,
+    result: result.map((c) => c.name),
+  });
+
+  return result;
 }

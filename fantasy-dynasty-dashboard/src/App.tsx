@@ -78,13 +78,13 @@ export default function App() {
             </form>
           </div>
           {data && (
-            <div className="mt-3 flex items-center gap-2">
-              <label className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 Your Team
                 <select
                   value={activeUserId}
                   onChange={(e) => setActiveUserId(e.target.value)}
-                  className="w-64 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2"
+                  className="w-full max-w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2 sm:w-64"
                 >
                   <option value="">— select your team —</option>
                   {teamOptions.map((t) => (
@@ -92,7 +92,7 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <span className="text-xs text-slate-600">Powers roster analysis, waiver drop suggestions, and draft-turn tracking.</span>
+              <span className="hidden text-xs text-slate-600 sm:inline">Powers roster analysis, waiver drop suggestions, and draft-turn tracking.</span>
             </div>
           )}
         </div>
