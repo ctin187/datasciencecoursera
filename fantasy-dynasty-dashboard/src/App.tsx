@@ -6,6 +6,7 @@ import { HomeTab } from './components/tabs/HomeTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { WaiversTab } from './components/tabs/WaiversTab';
+import { LineupOptimizerTab } from './components/tabs/LineupOptimizerTab';
 import { AgingCurvesTab } from './components/tabs/AgingCurvesTab';
 import { RosterHealthTab } from './components/tabs/RosterHealthTab';
 
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'draft', label: 'Draft Assistant' },
   { id: 'trade', label: 'Trade Analyzer' },
   { id: 'waivers', label: 'Waiver Wire' },
+  { id: 'lineup', label: 'Lineup Optimizer' },
   { id: 'roster', label: 'Team Deep Dive' },
   { id: 'aging', label: 'Aging Curves' },
   { id: 'league', label: 'League' },
@@ -155,6 +157,7 @@ export default function App() {
               <TradeAnalyzerTab data={data} derived={derived} onRefreshRosters={refreshRosters} refreshingRosters={refreshingRosters} />
             )}
             {tab === 'waivers' && <WaiversTab data={data} derived={derived} userId={activeUserId} />}
+            {tab === 'lineup' && <LineupOptimizerTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'aging' && <AgingCurvesTab data={data} derived={derived} />}
             {tab === 'roster' && <RosterHealthTab data={data} derived={derived} userId={activeUserId} />}
           </>
