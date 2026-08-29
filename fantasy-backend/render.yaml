@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: fantasy-dynasty-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # Comma-separated. Explicit origins only - the API never uses a wildcard.
+      - key: CORS_ORIGINS
+        value: https://ctin187.github.io,http://localhost:5173
+      - key: SEASONS
+        value: "2024,2025"
+      - key: DATA_DIR
+        value: /tmp/data_cache
+      - key: PYTHON_VERSION
+        value: "3.11.9"

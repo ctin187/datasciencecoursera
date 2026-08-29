@@ -162,7 +162,7 @@ export default function App() {
             {tab === 'lineup' && <LineupOptimizerTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'news' && <NewsFeedTab data={data} userId={activeUserId} />}
             {tab === 'aging' && <AgingCurvesTab data={data} derived={derived} />}
-            {tab === 'roster' && <RosterHealthTab data={data} derived={derived} userId={activeUserId} />}
+            {tab === 'roster' && <RosterHealthTab data={data} userId={activeUserId} />}
           </>
         )}
       </main>
