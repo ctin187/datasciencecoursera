@@ -135,6 +135,15 @@ export interface SleeperTransaction {
   leg: number;
 }
 
+/** One traded draft pick. Only picks that have actually changed hands appear here - an original, never-traded pick belongs to its original roster_id and simply doesn't show up in this list. */
+export interface SleeperTradedPick {
+  season: string;
+  round: number;
+  roster_id: number; // the pick's original owner
+  previous_owner_id: number;
+  owner_id: number; // current owner
+}
+
 // ---------------------------------------------------------------------------
 // Derived / computed types
 // ---------------------------------------------------------------------------

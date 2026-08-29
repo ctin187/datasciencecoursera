@@ -2,6 +2,10 @@ import type { LifecyclePhase, PlayersMap, ThreeDValue, TradeValueEntry } from '.
 import { peakAgeRange } from './agingCurves';
 import { resolvePlayerValue } from './playerValue';
 
+function debugLog(...args: unknown[]) {
+  if (typeof console !== 'undefined') console.debug('[tradeAnalyzer]', ...args);
+}
+
 export interface TradeAsset {
   type: 'player' | 'pick';
   playerId?: string;
@@ -71,13 +75,96 @@ export function analyzeTrade(
   const sideB = summarizeSide(sideBAssets, players, tradeValues);
 
   const total = sideA.totalValue + sideB.totalValue;
-  const deltaPct = total === 0 ? 0 : Math.round(((sideA.totalValue - sideB.totalValue) / total) * 200);
+  // "Team A gives" sideA, "Team B gives" sideB - so Team A *receives* sideB's
+  // value and *gives up* sideA's value. Team A comes out ahead when what they
+  // receive (sideB) exceeds what they give (sideA), i.e. deltaPct should be
+  // positive when sideB.totalValue > sideA.totalValue. (Previously this was
+  // inverted - the side that GAVE more value was shown as the "winner",
+  // which is backwards: giving away more than you receive is a loss, not a
+  // win. That inversion is what surfaced as "wrong winner" reports.)
+  const deltaPct = total === 0 ? 0 : Math.round(((sideB.totalValue - sideA.totalValue) / total) * 200);
 
   let winner: 'A' | 'B' | 'even' = 'even';
   if (deltaPct > 3) winner = 'A';
   else if (deltaPct < -3) winner = 'B';
 
+  debugLog('analyzeTrade', {
+    sideAValue: sideA.totalValue,
+    sideBValue: sideB.totalValue,
+    deltaPct,
+    winner,
+  });
+
   return { sideA, sideB, deltaPct, winner };
+}
+
+type AssetFit = 'future' | 'winNow' | 'neutral';
+
+/** Whether an asset's profile leans toward a rebuild ("future") or a win-now push, based on player age vs. positional peak, or pick=future. */
+function assetFit(asset: TradeAsset, players: PlayersMap, tradeValues: Map<string, TradeValueEntry>): AssetFit {
+  if (asset.type === 'pick') return 'future';
+  if (!asset.playerId) return 'neutral';
+  const resolved = resolvePlayerValue(asset.playerId, players, tradeValues);
+  if (resolved.age == null) return 'neutral';
+  const { start } = peakAgeRange(resolved.position);
+  return resolved.age < start ? 'future' : 'winNow';
+}
+
+/** How well an asset's fit ("future" vs. "winNow") matches a team's current roster-construction phase. */
+function fitMultiplier(fit: AssetFit, phase: LifecyclePhase | null): number {
+  if (fit === 'neutral' || phase === null || phase === 'middle') return 1;
+  if (phase === 'rebuild') return fit === 'future' ? 1.15 : 0.85;
+  if (phase === 'win-now') return fit === 'winNow' ? 1.15 : 0.85;
+  // 'contend' - still wants win-now value but less punitively than a full rebuild penalizes futures
+  return fit === 'winNow' ? 1.05 : 0.95;
+}
+
+export interface ContextualTradeResult {
+  sideAContextualValue: number; // what Team A gives, valued through Team B's timeline (what B is receiving)
+  sideBContextualValue: number; // what Team B gives, valued through Team A's timeline (what A is receiving)
+  deltaPct: number; // positive = favors Team A, same convention as TradeResult.deltaPct
+  winner: 'A' | 'B' | 'even';
+  hasContext: boolean; // false when neither roster was selected, so this is identical to pure value
+}
+
+/**
+ * Re-scores each side's assets by how well they fit the *receiving* team's
+ * timeline (rebuild teams get more value from picks/young players, win-now
+ * teams get more value from proven ready-now players), rather than the flat
+ * consensus value used by analyzeTrade. Requires both rosters to be
+ * selected (phaseA/phaseB) - falls back to the pure-value numbers otherwise.
+ */
+export function analyzeTradeContextual(
+  sideAAssets: TradeAsset[],
+  sideBAssets: TradeAsset[],
+  players: PlayersMap,
+  tradeValues: Map<string, TradeValueEntry>,
+  phaseA: LifecyclePhase | null,
+  phaseB: LifecyclePhase | null,
+): ContextualTradeResult {
+  const hasContext = phaseA !== null && phaseB !== null;
+
+  // sideA assets flow to Team B, so their contextual worth is judged against phaseB.
+  const sideAContextualValue = sideAAssets.reduce((sum, asset) => {
+    const { value } = assetValue(asset, players, tradeValues);
+    return sum + value * fitMultiplier(assetFit(asset, players, tradeValues), phaseB);
+  }, 0);
+  // sideB assets flow to Team A, so their contextual worth is judged against phaseA.
+  const sideBContextualValue = sideBAssets.reduce((sum, asset) => {
+    const { value } = assetValue(asset, players, tradeValues);
+    return sum + value * fitMultiplier(assetFit(asset, players, tradeValues), phaseA);
+  }, 0);
+
+  const total = sideAContextualValue + sideBContextualValue;
+  const deltaPct = total === 0 ? 0 : Math.round(((sideBContextualValue - sideAContextualValue) / total) * 200);
+
+  let winner: 'A' | 'B' | 'even' = 'even';
+  if (deltaPct > 3) winner = 'A';
+  else if (deltaPct < -3) winner = 'B';
+
+  debugLog('analyzeTradeContextual', { sideAContextualValue, sideBContextualValue, deltaPct, winner, hasContext });
+
+  return { sideAContextualValue: Math.round(sideAContextualValue), sideBContextualValue: Math.round(sideBContextualValue), deltaPct, winner, hasContext };
 }
 
 export function contextLabel(phase: LifecyclePhase): string {

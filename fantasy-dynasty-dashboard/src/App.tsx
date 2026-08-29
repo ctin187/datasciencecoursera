@@ -2,19 +2,25 @@ import { useState } from 'react';
 import { useLeagueData } from './hooks/useLeagueData';
 import { useDerivedData } from './hooks/useDerivedData';
 import { LeagueSettingsTab } from './components/tabs/LeagueSettingsTab';
+import { HomeTab } from './components/tabs/HomeTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { WaiversTab } from './components/tabs/WaiversTab';
+import { LineupOptimizerTab } from './components/tabs/LineupOptimizerTab';
+import { NewsFeedTab } from './components/tabs/NewsFeedTab';
 import { AgingCurvesTab } from './components/tabs/AgingCurvesTab';
 import { RosterHealthTab } from './components/tabs/RosterHealthTab';
 
 const TABS = [
-  { id: 'league', label: 'League Settings' },
+  { id: 'home', label: 'Home' },
   { id: 'draft', label: 'Draft Assistant' },
   { id: 'trade', label: 'Trade Analyzer' },
-  { id: 'waivers', label: 'Waivers' },
+  { id: 'waivers', label: 'Waiver Wire' },
+  { id: 'lineup', label: 'Lineup Optimizer' },
+  { id: 'news', label: 'News Feed' },
+  { id: 'roster', label: 'Team Deep Dive' },
   { id: 'aging', label: 'Aging Curves' },
-  { id: 'roster', label: 'Roster Health' },
+  { id: 'league', label: 'League' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -23,7 +29,7 @@ export default function App() {
   const [leagueIdInput, setLeagueIdInput] = useState('');
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>('');
-  const [tab, setTab] = useState<TabId>('league');
+  const [tab, setTab] = useState<TabId>('home');
 
   const { data, loading, error, progress, refreshRosters, refreshingRosters } = useLeagueData(activeLeagueId);
   const derived = useDerivedData(data?.players);
@@ -48,7 +54,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/60">
+      <header className="border-b border-violet-800/40 bg-slate-900/60">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -70,7 +76,7 @@ export default function App() {
               </label>
               <button
                 type="submit"
-                className="rounded-md bg-violet-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                className="min-h-[44px] rounded-md bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50 sm:min-h-0 sm:py-1.5"
                 disabled={loading}
               >
                 {loading ? 'Loading…' : 'Load League'}
@@ -78,13 +84,13 @@ export default function App() {
             </form>
           </div>
           {data && (
-            <div className="mt-3 flex items-center gap-2">
-              <label className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 Your Team
                 <select
                   value={activeUserId}
                   onChange={(e) => setActiveUserId(e.target.value)}
-                  className="w-64 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2"
+                  className="w-full max-w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2 sm:w-64"
                 >
                   <option value="">— select your team —</option>
                   {teamOptions.map((t) => (
@@ -92,7 +98,7 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <span className="text-xs text-slate-600">Powers roster analysis, waiver drop suggestions, and draft-turn tracking.</span>
+              <span className="hidden text-xs text-slate-600 sm:inline">Powers roster analysis, waiver drop suggestions, and draft-turn tracking.</span>
             </div>
           )}
         </div>
@@ -101,8 +107,8 @@ export default function App() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.id ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+              className={`min-h-[44px] whitespace-nowrap rounded-md px-3 py-2.5 text-sm font-medium transition-colors sm:min-h-0 sm:py-1.5 ${
+                tab === t.id ? 'bg-violet-600 text-slate-950 font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
               }`}
             >
               {t.label}
@@ -146,12 +152,15 @@ export default function App() {
                 Showing cached data — the last live refresh failed, so some information may be stale.
               </div>
             )}
+            {tab === 'home' && <HomeTab data={data} derived={derived} userId={activeUserId} setTab={setTab} />}
             {tab === 'league' && <LeagueSettingsTab data={data} userId={activeUserId} tradeValueMap={derived.tradeValueMap} />}
             {tab === 'draft' && <DraftAssistantTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'trade' && (
               <TradeAnalyzerTab data={data} derived={derived} onRefreshRosters={refreshRosters} refreshingRosters={refreshingRosters} />
             )}
             {tab === 'waivers' && <WaiversTab data={data} derived={derived} userId={activeUserId} />}
+            {tab === 'lineup' && <LineupOptimizerTab data={data} derived={derived} userId={activeUserId} />}
+            {tab === 'news' && <NewsFeedTab data={data} userId={activeUserId} />}
             {tab === 'aging' && <AgingCurvesTab data={data} derived={derived} />}
             {tab === 'roster' && <RosterHealthTab data={data} derived={derived} userId={activeUserId} />}
           </>
@@ -159,6 +168,7 @@ export default function App() {
       </main>
 
       <footer className="mx-auto max-w-7xl px-4 py-6 text-center text-xs text-slate-600 sm:px-6">
+        {data && <p className="mb-1 font-mono text-slate-500">Rosters loaded {new Date(data.rostersFetchedAt).toLocaleTimeString()}</p>}
         Data from the public Sleeper API. ADP, dynasty trade values, and snap/target share trends are a curated seed
         dataset for demonstration — refresh with a live consensus feed for production use.
       </footer>

@@ -5,6 +5,8 @@ import { Card, CardTitle, StatTile } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import {
   analyzeTrade,
+  analyzeTradeContextual,
+  contextLabel as contextLabelText,
   PICK_VALUES,
   tradeContextAssessment,
   type TradeAsset,
@@ -280,7 +282,22 @@ export function TradeAnalyzerTab({
     [sideAAssets, sideBAssets, data.players, derived.tradeValueMap],
   );
 
+  const contextualResult = useMemo(
+    () => analyzeTradeContextual(sideAAssets, sideBAssets, data.players, derived.tradeValueMap, phaseA, phaseB),
+    [sideAAssets, sideBAssets, data.players, derived.tradeValueMap, phaseA, phaseB],
+  );
+
   const assessment = tradeContextAssessment(result.sideA, result.sideB, phaseA, phaseB);
+
+  const verdictAgrees = !contextualResult.hasContext || contextualResult.winner === result.winner;
+  console.debug('[TradeAnalyzerTab] pure vs contextual', {
+    pureWinner: result.winner,
+    pureDeltaPct: result.deltaPct,
+    contextualWinner: contextualResult.winner,
+    contextualDeltaPct: contextualResult.deltaPct,
+    hasContext: contextualResult.hasContext,
+    verdictAgrees,
+  });
 
   return (
     <div className="space-y-6">
@@ -353,17 +370,19 @@ export function TradeAnalyzerTab({
 
       {(sideAAssets.length > 0 || sideBAssets.length > 0) && (
         <Card>
-          <CardTitle>Result</CardTitle>
+          <CardTitle subtitle="Team A gives is valued against what Team B gives, on the same consensus scale.">
+            Result — Pure Value Comparison
+          </CardTitle>
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Team A Value" value={result.sideA.totalValue} hint={result.sideA.avgAge ? `avg age ${result.sideA.avgAge.toFixed(1)}` : undefined} />
-            <StatTile label="Team B Value" value={result.sideB.totalValue} hint={result.sideB.avgAge ? `avg age ${result.sideB.avgAge.toFixed(1)}` : undefined} />
+            <StatTile label="Team A Gives (value)" value={result.sideA.totalValue} hint={result.sideA.avgAge ? `avg age ${result.sideA.avgAge.toFixed(1)}` : undefined} />
+            <StatTile label="Team B Gives (value)" value={result.sideB.totalValue} hint={result.sideB.avgAge ? `avg age ${result.sideB.avgAge.toFixed(1)}` : undefined} />
             <StatTile
-              label="Value Delta"
+              label="Pure Value Delta"
               value={`${result.deltaPct > 0 ? '+' : ''}${result.deltaPct}%`}
               hint={result.winner === 'even' ? 'Roughly even' : `Favors Team ${result.winner}`}
             />
             <StatTile
-              label="Winner"
+              label="Pure Value Winner"
               value={
                 <Badge color={result.winner === 'A' ? 'green' : result.winner === 'B' ? 'blue' : 'gray'}>
                   {result.winner === 'even' ? 'Even trade' : `Team ${result.winner}`}
@@ -371,6 +390,55 @@ export function TradeAnalyzerTab({
               }
             />
           </div>
+
+          <CardTitle
+            subtitle={
+              contextualResult.hasContext
+                ? 'Same trade, re-scored for how well each asset fits the receiving team\'s roster phase (win-now teams get more credit for proven starters, rebuilding teams get more credit for youth/picks).'
+                : 'Select both Team A and Team B rosters above to unlock phase-adjusted contextual scoring.'
+            }
+          >
+            Contextual Value (Phase-Adjusted)
+          </CardTitle>
+          {contextualResult.hasContext ? (
+            <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile label="Team A Gives (contextual)" value={contextualResult.sideAContextualValue} hint={phaseA ? contextLabelText(phaseA) : undefined} />
+              <StatTile label="Team B Gives (contextual)" value={contextualResult.sideBContextualValue} hint={phaseB ? contextLabelText(phaseB) : undefined} />
+              <StatTile
+                label="Contextual Delta"
+                value={`${contextualResult.deltaPct > 0 ? '+' : ''}${contextualResult.deltaPct}%`}
+                hint={contextualResult.winner === 'even' ? 'Roughly even' : `Favors Team ${contextualResult.winner}`}
+              />
+              <StatTile
+                label="Contextual Winner"
+                value={
+                  <Badge color={contextualResult.winner === 'A' ? 'green' : contextualResult.winner === 'B' ? 'blue' : 'gray'}>
+                    {contextualResult.winner === 'even' ? 'Even trade' : `Team ${contextualResult.winner}`}
+                  </Badge>
+                }
+              />
+            </div>
+          ) : (
+            <p className="mb-2 text-sm text-slate-500">No roster selected for one or both teams — contextual score unavailable.</p>
+          )}
+
+          <div className="mb-4 rounded-md border px-3 py-2 text-sm" style={{ borderColor: verdictAgrees ? undefined : '#f59e0b33' }}>
+            <span className="font-medium text-slate-200">Trade Fairness Verdict: </span>
+            {contextualResult.hasContext ? (
+              verdictAgrees ? (
+                <span className="text-slate-300">
+                  Pure value and contextual fit agree — {result.winner === 'even' ? 'this is a fair trade for both timelines.' : `this favors Team ${result.winner} on both a raw-value and timeline-fit basis.`}
+                </span>
+              ) : (
+                <span className="text-amber-400">
+                  Disagreement: pure value favors {result.winner === 'even' ? 'neither side' : `Team ${result.winner}`}, but once each side's roster phase is factored in, the advantage shifts to {contextualResult.winner === 'even' ? 'roughly even' : `Team ${contextualResult.winner}`}. Consider each team's timeline, not just the raw numbers.
+                </span>
+              )
+            ) : (
+              <span className="text-slate-400">Based on pure value only — pick both rosters above for a timeline-aware verdict.</span>
+            )}
+          </div>
+
           {assessment && <p className="text-sm text-slate-300">{assessment}</p>}
 
           <div className="mt-4 space-y-1.5">
