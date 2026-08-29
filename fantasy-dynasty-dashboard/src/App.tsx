@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLeagueData } from './hooks/useLeagueData';
 import { useDerivedData } from './hooks/useDerivedData';
 import { LeagueSettingsTab } from './components/tabs/LeagueSettingsTab';
+import { HomeTab } from './components/tabs/HomeTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { WaiversTab } from './components/tabs/WaiversTab';
@@ -9,12 +10,13 @@ import { AgingCurvesTab } from './components/tabs/AgingCurvesTab';
 import { RosterHealthTab } from './components/tabs/RosterHealthTab';
 
 const TABS = [
-  { id: 'league', label: 'League Settings' },
+  { id: 'home', label: 'Home' },
   { id: 'draft', label: 'Draft Assistant' },
   { id: 'trade', label: 'Trade Analyzer' },
-  { id: 'waivers', label: 'Waivers' },
+  { id: 'waivers', label: 'Waiver Wire' },
+  { id: 'roster', label: 'Team Deep Dive' },
   { id: 'aging', label: 'Aging Curves' },
-  { id: 'roster', label: 'Roster Health' },
+  { id: 'league', label: 'League' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -23,7 +25,7 @@ export default function App() {
   const [leagueIdInput, setLeagueIdInput] = useState('');
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>('');
-  const [tab, setTab] = useState<TabId>('league');
+  const [tab, setTab] = useState<TabId>('home');
 
   const { data, loading, error, progress, refreshRosters, refreshingRosters } = useLeagueData(activeLeagueId);
   const derived = useDerivedData(data?.players);
@@ -146,6 +148,7 @@ export default function App() {
                 Showing cached data — the last live refresh failed, so some information may be stale.
               </div>
             )}
+            {tab === 'home' && <HomeTab data={data} derived={derived} userId={activeUserId} setTab={setTab} />}
             {tab === 'league' && <LeagueSettingsTab data={data} userId={activeUserId} tradeValueMap={derived.tradeValueMap} />}
             {tab === 'draft' && <DraftAssistantTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'trade' && (

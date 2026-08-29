@@ -6,6 +6,7 @@ import type {
   SleeperDraftPick,
   PlayersMap,
   SleeperTransaction,
+  SleeperTradedPick,
 } from '../types';
 import { getCached, setCached, getStale, TTL } from './cache';
 
@@ -151,6 +152,15 @@ export const LeagueService = {
       if (stale) return { data: stale.data, stale: true, staleAt: stale.timestamp };
       throw new SleeperApiError('Network error reaching Sleeper API. Please try again.');
     }
+  },
+
+  /** Draft picks that have changed hands via trade. An original, never-traded pick isn't listed here at all - it still belongs to its original owner. */
+  async getTradedPicks(leagueId: string) {
+    return getJsonWithMeta<SleeperTradedPick[]>(
+      `/league/${leagueId}/traded_picks`,
+      `tradedpicks:${leagueId}`,
+      TTL.DRAFTS,
+    );
   },
 
   async getTransactions(leagueId: string, week: number) {
