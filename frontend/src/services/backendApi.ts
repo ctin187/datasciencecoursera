@@ -206,3 +206,75 @@ export async function fetchHealth(): Promise<{ status: string; provenance: Prove
   if (!res.ok) throw new BackendError(`HTTP ${res.status}`, res.status);
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Whole-player-universe endpoints (not scoped to one roster) - the backbone
+// for anything that needs a value for a player nobody has rostered yet:
+// draft boards, and any retrospective "was this pick good" analysis.
+// ---------------------------------------------------------------------------
+
+export interface ProjectedPlayer {
+  player_id: string; // GSIS ID
+  sleeper_id: string | null;
+  name: string | null;
+  position: string | null;
+  team: string | null;
+  games_sampled: number;
+  projected_points_per_game: number;
+  rest_of_season_points: number;
+}
+
+export interface ProjectionsResponse {
+  provenance: Provenance;
+  season: number;
+  as_of_week: number;
+  latest_cached_week: number;
+  games_remaining: number;
+  scoring_analysis: ScoringAnalysis;
+  count: number;
+  players: ProjectedPlayer[];
+}
+
+async function get<T>(path: string): Promise<T> {
+  if (!isBackendConfigured()) {
+    throw new BackendError('Backend not configured (VITE_API_BASE_URL is unset).');
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`);
+  } catch {
+    throw new BackendError(`Could not reach the backend at ${API_BASE_URL}. It may be asleep (free tiers idle out) or the URL may be wrong.`);
+  }
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail ?? j);
+    } catch {
+      /* keep the status-code message */
+    }
+    throw new BackendError(detail, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+export async function fetchProjections(params: { scoringSettings: Record<string, number>; limit?: number }): Promise<ProjectionsResponse> {
+  const q = new URLSearchParams({
+    scoring: JSON.stringify(params.scoringSettings),
+    limit: String(params.limit ?? 2000),
+  });
+  return get<ProjectionsResponse>(`/projections?${q.toString()}`);
+}
+
+export async function fetchReplacementLevelsGet(params: {
+  scoringSettings: Record<string, number>;
+  rosterPositions: string[];
+  numTeams: number;
+}): Promise<{ provenance: Provenance; replacement_levels: Record<string, ReplacementLevel> }> {
+  const q = new URLSearchParams({
+    scoring: JSON.stringify(params.scoringSettings),
+    roster_positions: params.rosterPositions.join(','),
+    num_teams: String(params.numTeams),
+  });
+  return get(`/players/replacement-level?${q.toString()}`);
+}

@@ -3,11 +3,13 @@ import { useLeagueData } from './hooks/useLeagueData';
 import { useSeasonSimulation } from './hooks/useSeasonSimulation';
 import { useRosterHealth } from './hooks/useRosterHealth';
 import { useWaiverTargets } from './hooks/useWaiverTargets';
+import { useProjectionPool } from './hooks/useProjectionPool';
 import { LeagueOverviewTab } from './components/tabs/LeagueOverviewTab';
 import { RosterValueTab } from './components/tabs/RosterValueTab';
 import { WaiverWireTab } from './components/tabs/WaiverWireTab';
 import { SeasonOutlookTab } from './components/tabs/SeasonOutlookTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
+import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 
 // Four tabs. This app targets both redraft and dynasty/keeper Sleeper
 // leagues - League Overview auto-detects which one you're in (and every
@@ -22,6 +24,7 @@ import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 const TABS = [
   { id: 'league', label: 'League Overview' },
   { id: 'roster', label: 'Roster Value' },
+  { id: 'draft', label: 'Draft Assistant' },
   { id: 'trade', label: 'Trade Analyzer' },
   { id: 'waivers', label: 'Waiver Wire' },
   { id: 'season', label: 'Season Outlook' },
@@ -39,6 +42,7 @@ export default function App() {
   const seasonSim = useSeasonSimulation(activeLeagueId, data?.league, data?.rosters, data?.users);
   const rosterHealth = useRosterHealth(data, activeUserId);
   const waiverTargets = useWaiverTargets(data, activeUserId);
+  const projectionPool = useProjectionPool(data?.league);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,6 +165,7 @@ export default function App() {
             )}
             {tab === 'league' && <LeagueOverviewTab data={data} userId={activeUserId} />}
             {tab === 'roster' && <RosterValueTab data={data} userId={activeUserId} health={rosterHealth} />}
+            {tab === 'draft' && <DraftAssistantTab data={data} userId={activeUserId} pool={projectionPool} />}
             {tab === 'trade' && <TradeAnalyzerTab data={data} health={rosterHealth} seasonSim={seasonSim} />}
             {tab === 'waivers' && <WaiverWireTab waivers={waiverTargets} />}
             {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
