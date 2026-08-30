@@ -7,6 +7,7 @@ import { LeagueOverviewTab } from './components/tabs/LeagueOverviewTab';
 import { RosterValueTab } from './components/tabs/RosterValueTab';
 import { WaiverWireTab } from './components/tabs/WaiverWireTab';
 import { SeasonOutlookTab } from './components/tabs/SeasonOutlookTab';
+import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 
 // Four tabs. This app targets both redraft and dynasty/keeper Sleeper
 // leagues - League Overview auto-detects which one you're in (and every
@@ -21,6 +22,7 @@ import { SeasonOutlookTab } from './components/tabs/SeasonOutlookTab';
 const TABS = [
   { id: 'league', label: 'League Overview' },
   { id: 'roster', label: 'Roster Value' },
+  { id: 'trade', label: 'Trade Analyzer' },
   { id: 'waivers', label: 'Waiver Wire' },
   { id: 'season', label: 'Season Outlook' },
 ] as const;
@@ -159,6 +161,7 @@ export default function App() {
             )}
             {tab === 'league' && <LeagueOverviewTab data={data} userId={activeUserId} />}
             {tab === 'roster' && <RosterValueTab data={data} userId={activeUserId} health={rosterHealth} />}
+            {tab === 'trade' && <TradeAnalyzerTab data={data} health={rosterHealth} seasonSim={seasonSim} />}
             {tab === 'waivers' && <WaiverWireTab waivers={waiverTargets} />}
             {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
           </>

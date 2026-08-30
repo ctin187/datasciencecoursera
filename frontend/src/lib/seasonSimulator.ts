@@ -145,6 +145,8 @@ export function runSeasonSimulation(params: {
   matchupsByWeek: Map<number, SleeperMatchup[]>;
   bracket?: WinnersBracketMatchup[];
   simulations?: number;
+  /** Roster ID -> points/game to add to that team's modeled future mean score (e.g. a hypothetical trade's VOR delta). Only affects weeks not yet played. */
+  meanAdjustments?: Map<number, number>;
 }): SeasonSimulationResult {
   const { league, rosters, users, matchupsByWeek, bracket = [] } = params;
   const simulations = params.simulations ?? SIMULATIONS;
@@ -204,6 +206,12 @@ export function runSeasonSimulation(params: {
       mean: w * teamMean + (1 - w) * leagueMean,
       stdev: w * teamStdev + (1 - w) * leagueStdev,
     });
+  }
+  if (params.meanAdjustments) {
+    for (const [rosterId, delta] of params.meanAdjustments) {
+      const s = strength.get(rosterId);
+      if (s) s.mean += delta;
+    }
   }
 
   // Season already fully played out and playoffs resolved: report the real outcome, no simulation needed.

@@ -7,6 +7,8 @@ export interface SeasonSimulationState {
   result: SeasonSimulationResult | null;
   loading: boolean;
   error: string | null;
+  /** Raw inputs behind `result`, exposed so other features (e.g. the Trade Analyzer) can re-run the simulator with a what-if adjustment without re-fetching. Null until the first successful run. */
+  rawInputs: { matchupsByWeek: Map<number, SleeperMatchup[]>; bracket: WinnersBracketMatchup[] } | null;
 }
 
 /**
@@ -24,6 +26,7 @@ export function useSeasonSimulation(
   const [result, setResult] = useState<SeasonSimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rawInputs, setRawInputs] = useState<SeasonSimulationState['rawInputs']>(null);
 
   useEffect(() => {
     if (!leagueId || !league || !rosters || !users) {
@@ -62,7 +65,10 @@ export function useSeasonSimulation(
         if (cancelled) return;
 
         const sim = runSeasonSimulation({ league: league!, rosters: rosters!, users: users!, matchupsByWeek, bracket });
-        if (!cancelled) setResult(sim);
+        if (!cancelled) {
+          setResult(sim);
+          setRawInputs({ matchupsByWeek, bracket });
+        }
       } catch {
         if (!cancelled) setError('Could not load matchup data for the season simulation.');
       } finally {
@@ -77,5 +83,5 @@ export function useSeasonSimulation(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leagueId, league?.settings.playoff_week_start, rosters, users]);
 
-  return { result, loading, error };
+  return { result, loading, error, rawInputs };
 }
