@@ -1,7 +1,7 @@
-# Fantasy Dynasty Backend
+# Fantasy Decision Dashboard Backend
 
 Python/FastAPI service that serves nflverse NFL data, transparent projections,
-and Value Over Replacement to the React Sleeper dashboard.
+and Value Over Replacement to the React Sleeper dashboard (`/frontend`).
 
 ## Why it exists
 
@@ -47,7 +47,7 @@ cache that a daily background job populates.
 
 The Blueprint lives at the **repository root** (`/render.yaml`), not in this
 directory — Render only looks for `render.yaml` at the root, and points it here
-via `rootDir: fantasy-backend`.
+via `rootDir: backend`.
 
 1. render.com → **New +** → **Blueprint** → connect this repo.
    It finds `/render.yaml` and fills in build command, start command, health

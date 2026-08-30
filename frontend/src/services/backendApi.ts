@@ -1,5 +1,5 @@
 /**
- * Client for the Python VOR backend (see /fantasy-backend).
+ * Client for the Python VOR backend (see /backend).
  *
  * The base URL comes from VITE_API_BASE_URL at build time. When it isn't set
  * the UI says the backend is unconfigured rather than rendering an empty state

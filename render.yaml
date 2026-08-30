@@ -1,4 +1,4 @@
-# Render Blueprint for the fantasy dynasty backend.
+# Render Blueprint for the fantasy decision-engine backend.
 #
 # This file MUST live at the repository root - Render's Blueprint flow only
 # looks for render.yaml here, not in subdirectories. `rootDir` points it at the
@@ -7,11 +7,17 @@
 # To deploy: render.com -> New + -> Blueprint -> connect this repo. Render finds
 # this file and fills in everything below; you only pick the free plan and
 # click Apply.
+#
+# Service name is left unchanged from the app's earlier "fantasy dynasty"
+# branding on purpose: it's what an already-deployed Render service is keyed
+# by, and renaming it would orphan the live instance rather than update it in
+# place. Nothing about the backend's actual function (nflverse projections,
+# VOR) changed when the app around it was rebuilt.
 services:
   - type: web
     name: fantasy-dynasty-backend
     runtime: python
-    rootDir: fantasy-backend
+    rootDir: backend
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT

@@ -1,11 +1,11 @@
-name: Deploy Fantasy Dynasty Dashboard
+name: Deploy Fantasy Decision Dashboard
 
 on:
   push:
     branches: [master]
     paths:
-      - 'fantasy-dynasty-dashboard/**'
-      - '.github/workflows/deploy-fantasy-dynasty-dashboard.yml'
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch: {}
 
 permissions:
@@ -27,17 +27,17 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: fantasy-dynasty-dashboard/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        working-directory: fantasy-dynasty-dashboard
+        working-directory: frontend
         run: npm ci
 
       - name: Build
-        working-directory: fantasy-dynasty-dashboard
+        working-directory: frontend
         env:
           GITHUB_PAGES: 'true'
-          # Base URL of the deployed Python VOR backend (see /fantasy-backend).
+          # Base URL of the deployed Python VOR backend (see /backend).
           #
           # Defaults to the project's own Render service. This is deliberately a
           # committed default rather than a required setup step: the value is a
@@ -63,7 +63,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: fantasy-dynasty-dashboard/dist
+          path: frontend/dist
 
   deploy:
     needs: build

@@ -1,30 +1,28 @@
 import { useState } from 'react';
 import { useLeagueData } from './hooks/useLeagueData';
-import { useDerivedData } from './hooks/useDerivedData';
 import { useSeasonSimulation } from './hooks/useSeasonSimulation';
-import { LeagueSettingsTab } from './components/tabs/LeagueSettingsTab';
-import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
-import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
-import { WaiversTab } from './components/tabs/WaiversTab';
-import { RosterHealthTab } from './components/tabs/RosterHealthTab';
+import { useRosterHealth } from './hooks/useRosterHealth';
+import { useWaiverTargets } from './hooks/useWaiverTargets';
+import { LeagueOverviewTab } from './components/tabs/LeagueOverviewTab';
+import { RosterValueTab } from './components/tabs/RosterValueTab';
+import { WaiverWireTab } from './components/tabs/WaiverWireTab';
 import { SeasonOutlookTab } from './components/tabs/SeasonOutlookTab';
 
-// Six tabs, deliberately. Roster health is ONE view (VOR) rather than the two
-// contradictory ones this app used to carry - a letter-grade Home tab and a
-// VOR deep dive that disagreed about how good your team was. Aging Curves is
-// folded into the roster view. News Feed and Lineup Optimizer are removed:
-// both depended on ESPN endpoints that were never verified reachable from a
-// real browser. They can come back proxied through the backend, where CORS
-// isn't a problem, if they earn their place. Season Outlook is the Monte
-// Carlo playoff/championship probability engine - the app's answer to "am I
-// actually going to win this league," built from real Sleeper matchup data.
+// Four tabs. This app targets both redraft and dynasty/keeper Sleeper
+// leagues - League Overview auto-detects which one you're in (and every
+// other setting: scoring, superflex, waivers, playoffs) directly from
+// Sleeper rather than assuming a format. Roster Value and Waiver Wire run on
+// real nflverse-derived projections and VOR from the Python backend - if
+// that backend isn't configured, those tabs say so instead of guessing.
+// Season Outlook is a Monte Carlo playoff/championship probability engine
+// built from real Sleeper matchup history. Draft Assistant, Trade Analyzer,
+// FAAB optimization, League DNA, and the Edge/backtesting layers described
+// in the product spec are not built yet - see the README roadmap.
 const TABS = [
-  { id: 'roster', label: 'My Team' },
-  { id: 'season', label: 'Season Outlook' },
-  { id: 'draft', label: 'Draft Assistant' },
-  { id: 'trade', label: 'Trade Analyzer' },
+  { id: 'league', label: 'League Overview' },
+  { id: 'roster', label: 'Roster Value' },
   { id: 'waivers', label: 'Waiver Wire' },
-  { id: 'league', label: 'League' },
+  { id: 'season', label: 'Season Outlook' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -33,11 +31,12 @@ export default function App() {
   const [leagueIdInput, setLeagueIdInput] = useState('');
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>('');
-  const [tab, setTab] = useState<TabId>('roster');
+  const [tab, setTab] = useState<TabId>('league');
 
-  const { data, loading, error, progress, refreshRosters, refreshingRosters } = useLeagueData(activeLeagueId);
-  const derived = useDerivedData(data?.players);
+  const { data, loading, error, progress } = useLeagueData(activeLeagueId);
   const seasonSim = useSeasonSimulation(activeLeagueId, data?.league, data?.rosters, data?.users);
+  const rosterHealth = useRosterHealth(data, activeUserId);
+  const waiverTargets = useWaiverTargets(data, activeUserId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,10 +62,10 @@ export default function App() {
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Fantasy Dynasty Dashboard</h1>
+              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Fantasy Decision Intelligence Dashboard</h1>
               <p className="text-xs text-slate-500 sm:text-sm">
-                Startup-draft intelligence for Sleeper dynasty leagues — ADP vs. long-term value, trade analysis,
-                FAAB optimization, and aging curves.
+                League-specific analysis for your actual Sleeper league — auto-detected settings, real VOR from nflverse
+                projections, and Monte Carlo playoff odds. Not a generic rankings site.
               </p>
             </div>
             <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -103,7 +102,7 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <span className="hidden text-xs text-slate-600 sm:inline">Powers roster analysis, waiver drop suggestions, and draft-turn tracking.</span>
+              <span className="hidden text-xs text-slate-600 sm:inline">Powers roster value, waiver drop suggestions, and your season outlook.</span>
             </div>
           )}
         </div>
@@ -131,6 +130,7 @@ export default function App() {
                 sleeper.com/leagues/<b>918876425783136256</b>/team
               </code>
             </p>
+            <p className="mt-2 text-sm">Works for both redraft and dynasty/keeper leagues — the app detects which one you're in.</p>
           </div>
         )}
 
@@ -150,29 +150,25 @@ export default function App() {
           </div>
         )}
 
-        {data && derived && (
+        {data && (
           <>
             {data.stale && (
               <div className="mb-4 rounded-md border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
                 Showing cached data — the last live refresh failed, so some information may be stale.
               </div>
             )}
-            {tab === 'roster' && <RosterHealthTab data={data} userId={activeUserId} />}
+            {tab === 'league' && <LeagueOverviewTab data={data} userId={activeUserId} />}
+            {tab === 'roster' && <RosterValueTab data={data} userId={activeUserId} health={rosterHealth} />}
+            {tab === 'waivers' && <WaiverWireTab waivers={waiverTargets} />}
             {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
-            {tab === 'draft' && <DraftAssistantTab data={data} derived={derived} userId={activeUserId} />}
-            {tab === 'trade' && (
-              <TradeAnalyzerTab data={data} derived={derived} onRefreshRosters={refreshRosters} refreshingRosters={refreshingRosters} />
-            )}
-            {tab === 'waivers' && <WaiversTab data={data} userId={activeUserId} />}
-            {tab === 'league' && <LeagueSettingsTab data={data} userId={activeUserId} tradeValueMap={derived.tradeValueMap} />}
           </>
         )}
       </main>
 
       <footer className="mx-auto max-w-7xl px-4 py-6 text-center text-xs text-slate-600 sm:px-6">
         {data && <p className="mb-1 font-mono text-slate-500">Rosters loaded {new Date(data.rostersFetchedAt).toLocaleTimeString()}</p>}
-        Data from the public Sleeper API. ADP, dynasty trade values, and snap/target share trends are a curated seed
-        dataset for demonstration — refresh with a live consensus feed for production use.
+        League, roster, and matchup data from the public Sleeper API. Projections and VOR from nflverse play-by-play data via
+        the project's own backend. No fabricated statistics — see each tab for source and methodology.
       </footer>
     </div>
   );

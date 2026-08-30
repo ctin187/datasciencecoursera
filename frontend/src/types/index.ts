@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Core domain types for the Fantasy Football Dynasty League Dashboard
+// Core domain types for the Fantasy Football Decision Intelligence Dashboard
 // ---------------------------------------------------------------------------
 
 export type OffensivePosition = 'QB' | 'RB' | 'WR' | 'TE';
@@ -19,6 +19,8 @@ export interface SleeperLeague {
   roster_positions: string[];
   scoring_settings: Record<string, number>;
   settings: {
+    /** 0 = redraft, 1 = keeper, 2 = dynasty (per Sleeper's long-standing, widely-used convention). */
+    type?: number;
     playoff_teams?: number;
     playoff_week_start?: number;
     trade_deadline?: number;
@@ -142,141 +144,6 @@ export interface SleeperTradedPick {
   roster_id: number; // the pick's original owner
   previous_owner_id: number;
   owner_id: number; // current owner
-}
-
-// ---------------------------------------------------------------------------
-// Derived / computed types
-// ---------------------------------------------------------------------------
-
-export interface AgingCurvePoint {
-  age: number;
-  multiplier: number; // relative to peak (1.0 = peak)
-}
-
-export interface AgingCurveModel {
-  position: Position;
-  peakStart: number;
-  peakEnd: number;
-  declineStartRate: number; // % decline per year immediately after peak
-  declineLateRate: number; // % decline per year in the "cliff" zone
-  cliffAge: number; // age at which decline accelerates
-  breakoutFloor: number; // youngest age curve considers "established"
-}
-
-export interface MultiYearProjection {
-  year: number;
-  age: number;
-  projectedPoints: number;
-  percentOfPeak: number;
-}
-
-export interface ThreeDValue {
-  playerId: string;
-  currentProjection: number;
-  threeYearOutlook: number;
-  fiveYearOutlook: number;
-  tenYearOutlook: number;
-  blendedValue: number;
-  percentile: number; // 0-100 across the pool it was computed in
-  multiYear: MultiYearProjection[];
-}
-
-export interface ConsensusADP {
-  playerId: string;
-  name: string;
-  position: Position;
-  team: string | null;
-  age: number | null;
-  fantasyProsEcr: number;
-  sleeperAdp: number;
-  underdogAdp: number;
-  consensusAdp: number; // blended
-}
-
-export interface TradeValueEntry {
-  playerId: string;
-  name: string;
-  position: Position;
-  age: number | null;
-  fantasyProsValue: number;
-  keepTradeCutValue: number;
-  draftSharksValue: number;
-  consensusValue: number; // blended 0-10000 scale
-  tier: string;
-}
-
-export interface DraftTier {
-  tier: string;
-  position: Position | 'ALL';
-  minValue: number;
-  maxValue: number;
-  players: string[]; // player IDs, ordered
-}
-
-export type LifecyclePhase = 'win-now' | 'contend' | 'middle' | 'rebuild';
-
-export interface RosterAnalysis {
-  rosterId: number;
-  ownerName: string;
-  phase: LifecyclePhase;
-  avgAge: number;
-  eliteAgingCount: number; // 28+ elite players
-  youngAssetCount: number; // <=24 startable players
-  totalValue: number;
-  positionalAges: Record<Position, number[]>;
-  positionalValues: Record<Position, number>; // summed consensus trade value per position
-  starterValue: number;
-  benchValue: number;
-  retirementRisk: { playerId: string; risk: 'low' | 'medium' | 'high'; reason: string }[];
-}
-
-export interface DropCandidate {
-  playerId: string;
-  name: string;
-  position: Position;
-  reason: string;
-}
-
-export interface ResolvedPlayerValue {
-  playerId: string;
-  name: string;
-  position: Position;
-  age: number | null;
-  team: string | null;
-  status: string;
-  consensusValue: number;
-  tier: string;
-  /** 'curated' = from the hand-curated ADP/trade-value seed dataset. 'estimated' = derived from Sleeper's search_rank, no seed entry. 'none' = no signal available at all. */
-  source: 'curated' | 'estimated' | 'none';
-}
-
-export type LetterGrade = 'A' | 'B' | 'C' | 'D' | 'F';
-
-export interface TeamGrade {
-  rosterId: number;
-  ownerName: string;
-  contentionScore: number; // 0-100, weight 25%
-  ageCurveScore: number; // 0-100, weight 20%
-  depthScore: number; // 0-100, weight 25%
-  injuryRiskScore: number; // 0-100 (higher = safer), weight 15%
-  projectedPointsScore: number; // 0-100, weight 15%
-  overall: number; // 0-100 weighted blend
-  letter: LetterGrade;
-  winNowGrade: number; // 0-100
-  rebuildGrade: number; // 0-100
-  longevityScore: number; // 0-100
-  breakdown: string[]; // human-readable line items showing the math
-}
-
-export interface FaabSuggestion {
-  playerId: string;
-  name: string;
-  position: Position;
-  suggestedBid: number;
-  minBid: number;
-  maxBid: number;
-  priority: 'HIGH PRIORITY' | 'MEDIUM' | 'LOW' | 'SPECULATIVE';
-  reason: string;
 }
 
 // ---------------------------------------------------------------------------
