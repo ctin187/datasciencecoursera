@@ -1,0 +1,35 @@
+# Render Blueprint for the fantasy dynasty backend.
+#
+# This file MUST live at the repository root - Render's Blueprint flow only
+# looks for render.yaml here, not in subdirectories. `rootDir` points it at the
+# actual service directory.
+#
+# To deploy: render.com -> New + -> Blueprint -> connect this repo. Render finds
+# this file and fills in everything below; you only pick the free plan and
+# click Apply.
+services:
+  - type: web
+    name: fantasy-dynasty-backend
+    runtime: python
+    rootDir: fantasy-backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # /health returns 200 as soon as the process is up, before the first data
+    # refresh finishes, so Render won't kill the service while it warms.
+    healthCheckPath: /health
+    envVars:
+      # Explicit origins only - the API never uses a wildcard. Add your own
+      # origin here if you serve the frontend from somewhere else.
+      - key: CORS_ORIGINS
+        value: https://ctin187.github.io,http://localhost:5173
+      # One season. The projection model scopes every query to a single season,
+      # so ingesting more only costs memory - and the free tier has 512MB.
+      - key: SEASONS
+        value: "2025"
+      # Render's filesystem is ephemeral; /tmp is writable and the cache
+      # rebuilds on boot in about a minute.
+      - key: DATA_DIR
+        value: /tmp/data_cache
+      - key: PYTHON_VERSION
+        value: "3.11.9"

@@ -16,13 +16,21 @@ from pathlib import Path
 # if you want the cache to survive restarts; otherwise it rebuilds on boot.
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data_cache")).resolve()
 
-# Seasons to ingest. Two seasons gives the projection model prior-year context
-# for players with thin current-season samples.
+# Seasons to ingest.
+#
+# One by default, deliberately. An earlier version pulled two "to give the
+# projection model prior-year context" - but that was never implemented: every
+# query in projections.py, usage.py and main.py scopes to a single season, so
+# the extra season was downloaded, parsed and held in memory without ever being
+# read. On Render's 512MB free tier that waste is the difference between
+# comfortable and OOM.
+#
+# Set SEASONS="2024,2025" if you add genuine cross-season logic later.
 def _parse_seasons() -> list[int]:
     raw = os.getenv("SEASONS")
     if raw:
         return [int(s.strip()) for s in raw.split(",") if s.strip()]
-    return [2024, 2025]
+    return [2025]
 
 
 SEASONS: list[int] = _parse_seasons()
