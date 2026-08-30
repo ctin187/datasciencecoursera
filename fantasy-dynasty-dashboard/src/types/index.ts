@@ -279,6 +279,37 @@ export interface FaabSuggestion {
   reason: string;
 }
 
+// ---------------------------------------------------------------------------
+// Weekly matchups / playoff bracket / NFL state — inputs to the season simulator
+// ---------------------------------------------------------------------------
+
+export interface SleeperMatchup {
+  matchup_id: number | null;
+  roster_id: number;
+  points: number;
+  starters?: string[] | null;
+  players?: string[] | null;
+}
+
+/** One node in Sleeper's single-elimination playoff bracket. `p` marks a placement game (3rd place, etc.) - absent on the real championship match. */
+export interface WinnersBracketMatchup {
+  r: number;
+  m: number;
+  t1: number | null;
+  t2: number | null;
+  w: number | null;
+  l: number | null;
+  t1_from?: { w?: number; l?: number } | null;
+  t2_from?: { w?: number; l?: number } | null;
+  p?: number;
+}
+
+export interface NflState {
+  week: number;
+  season: string;
+  season_type: string; // 'pre' | 'regular' | 'post'
+}
+
 export interface CachedEntry<T> {
   timestamp: number;
   data: T;

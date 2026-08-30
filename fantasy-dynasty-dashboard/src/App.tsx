@@ -1,21 +1,26 @@
 import { useState } from 'react';
 import { useLeagueData } from './hooks/useLeagueData';
 import { useDerivedData } from './hooks/useDerivedData';
+import { useSeasonSimulation } from './hooks/useSeasonSimulation';
 import { LeagueSettingsTab } from './components/tabs/LeagueSettingsTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { WaiversTab } from './components/tabs/WaiversTab';
 import { RosterHealthTab } from './components/tabs/RosterHealthTab';
+import { SeasonOutlookTab } from './components/tabs/SeasonOutlookTab';
 
-// Five tabs, deliberately. Roster health is ONE view (VOR) rather than the two
+// Six tabs, deliberately. Roster health is ONE view (VOR) rather than the two
 // contradictory ones this app used to carry - a letter-grade Home tab and a
 // VOR deep dive that disagreed about how good your team was. Aging Curves is
 // folded into the roster view. News Feed and Lineup Optimizer are removed:
 // both depended on ESPN endpoints that were never verified reachable from a
 // real browser. They can come back proxied through the backend, where CORS
-// isn't a problem, if they earn their place.
+// isn't a problem, if they earn their place. Season Outlook is the Monte
+// Carlo playoff/championship probability engine - the app's answer to "am I
+// actually going to win this league," built from real Sleeper matchup data.
 const TABS = [
   { id: 'roster', label: 'My Team' },
+  { id: 'season', label: 'Season Outlook' },
   { id: 'draft', label: 'Draft Assistant' },
   { id: 'trade', label: 'Trade Analyzer' },
   { id: 'waivers', label: 'Waiver Wire' },
@@ -32,6 +37,7 @@ export default function App() {
 
   const { data, loading, error, progress, refreshRosters, refreshingRosters } = useLeagueData(activeLeagueId);
   const derived = useDerivedData(data?.players);
+  const seasonSim = useSeasonSimulation(activeLeagueId, data?.league, data?.rosters, data?.users);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +158,7 @@ export default function App() {
               </div>
             )}
             {tab === 'roster' && <RosterHealthTab data={data} userId={activeUserId} />}
+            {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
             {tab === 'draft' && <DraftAssistantTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'trade' && (
               <TradeAnalyzerTab data={data} derived={derived} onRefreshRosters={refreshRosters} refreshingRosters={refreshingRosters} />

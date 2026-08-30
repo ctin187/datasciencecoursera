@@ -46,4 +46,7 @@ export const TTL = {
   PLAYERS: 24 * 60 * 60 * 1000, // 24 hours - large payload, refresh daily
   DRAFTS: 5 * 60 * 1000,
   TRANSACTIONS: 2 * 60 * 1000,
+  MATCHUPS: 5 * 60 * 1000,
+  BRACKET: 5 * 60 * 1000,
+  NFL_STATE: 10 * 60 * 1000,
 };

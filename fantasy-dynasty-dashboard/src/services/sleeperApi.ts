@@ -7,6 +7,9 @@ import type {
   PlayersMap,
   SleeperTransaction,
   SleeperTradedPick,
+  SleeperMatchup,
+  WinnersBracketMatchup,
+  NflState,
 } from '../types';
 import { getCached, setCached, getStale, TTL } from './cache';
 
@@ -174,6 +177,29 @@ export const LeagueService = {
   /** Full NFL player dictionary (~5MB). Cached for 24h per Sleeper's guidance. */
   async getAllPlayers() {
     return getJsonWithMeta<PlayersMap>(`/players/nfl`, `players:all`, TTL.PLAYERS);
+  },
+
+  /** Points + starters per roster for one scored week. Sleeper publishes the full-season schedule (matchup_id pairings) upfront, so future weeks return here too, just with points at 0 until played. */
+  async getMatchups(leagueId: string, week: number) {
+    return getJsonWithMeta<SleeperMatchup[]>(
+      `/league/${leagueId}/matchups/${week}`,
+      `matchups:${leagueId}:${week}`,
+      TTL.MATCHUPS,
+    );
+  },
+
+  /** Single-elimination playoff bracket. Empty before the bracket is seeded (i.e. before the playoffs begin). */
+  async getWinnersBracket(leagueId: string) {
+    return getJsonWithMeta<WinnersBracketMatchup[]>(
+      `/league/${leagueId}/winners_bracket`,
+      `bracket:${leagueId}`,
+      TTL.BRACKET,
+    );
+  },
+
+  /** Current NFL week/season-type. Not league-scoped - same for every league. */
+  async getNflState() {
+    return getJsonWithMeta<NflState>(`/state/nfl`, `nflstate`, TTL.NFL_STATE);
   },
 
   /** Chain: league -> previous_league_id links, for multi-season history. */

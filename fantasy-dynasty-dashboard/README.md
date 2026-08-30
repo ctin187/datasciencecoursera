@@ -18,6 +18,8 @@ and users, then layers on draft strategy, trade analysis, waiver optimization, a
   and a sell-high candidate list.
 - **Roster Health** — lifecycle-phase detection (win-now / contend / rebuild / stuck-in-the-middle), a
   retirement-risk heatmap, and a 3-year future-roster projection.
+- **Season Outlook** — Monte Carlo playoff and championship probability, built entirely from real Sleeper
+  matchup results (not fabricated projections). See below for method and limitations.
 
 ## Getting started
 
@@ -42,6 +44,8 @@ src/
   lib/tradeAnalyzer.ts      Trade value delta, win-now/rebuild context assessment
   lib/waiverOptimizer.ts    Snap/target share trend estimation, FAAB bid suggestions
   lib/rosterAnalyzer.ts     Lifecycle-phase detection, retirement risk, future roster projection
+  lib/seasonSimulator.ts    Monte Carlo playoff/championship probability from real matchup history
+  hooks/useSeasonSimulation.ts  Fetches every week's matchups + the playoff bracket, runs the simulator
   data/consensusPlayers.ts  Curated seed dataset (ADP + dynasty trade value) — see note below
   lib/playerMatcher.ts      Joins the seed dataset to live Sleeper player IDs by normalized name
   hooks/                    useLeagueData (Sleeper fetch orchestration), useDerivedData (memoized value calcs)
@@ -62,6 +66,31 @@ src/
   for a licensed stats feed — see the comment in `lib/waiverOptimizer.ts` for what to swap in for production use.
 - **Current-season point projections** are approximated from consensus ADP rank via a decay curve
   (`lib/valueCalculator.ts`), since the app has no licensed weekly-projection feed.
+
+## Season Outlook: method & limitations
+
+The Season Outlook tab answers "what's my actual chance of winning this league" via a bootstrap-parametric
+Monte Carlo simulation (thousands of simulated seasons, default 4,000):
+
+1. Each team's real weekly scores are pulled from Sleeper's `/matchups/{week}` endpoint for every week that's
+   actually been played. Already-played weeks are replayed exactly as they happened (real wins/losses/points
+   from `roster.settings`) — nothing about the past is simulated.
+2. Each team's future weekly score is modeled as Normal(mean, stdev), where mean/stdev are that team's own
+   actual scores shrunk toward the league-wide average (an empirical-Bayes-style prior worth ~3 games) so a
+   hot or cold start in Week 1-2 doesn't overwhelm the model before there's enough evidence to trust it.
+3. Remaining weeks are simulated using the real future schedule — Sleeper publishes the full season's
+   matchup pairings upfront, so the schedule itself isn't guessed.
+4. A single-elimination playoff bracket is seeded from each simulated season's final standings (byes to the
+   top seeds when the field isn't a power of two) and simulated through to a champion.
+
+**Known simplifications, stated so they aren't mistaken for fact:** weekly scores are treated as independent
+Normal draws (no player-level correlation or matchup-specific boosts); the regular-season tiebreaker used is
+wins-then-points-for, which may not match your league's actual tiebreak rule; the playoff bracket is assumed
+fully re-seeded each round (best remaining seed vs. worst remaining seed) rather than a fixed bracket, which
+some leagues use instead; rosters/starters are assumed unchanged for the rest of the season. All probabilities
+are labeled as model estimates in the UI, not guarantees — every card states the simulation count and the
+weeks actually played (i.e. the sample size) so you can judge how much to trust a given number. With zero
+completed weeks the tab refuses to simulate at all rather than fabricate a projection-based estimate.
 
 ## Tech stack
 
