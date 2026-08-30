@@ -67,6 +67,15 @@ npm install
 npm run dev
 ```
 
+Run the test suite (pure logic only — `lib/*.ts`, no component tests) with:
+
+```bash
+npm test
+```
+
+It's also gated in CI: `.github/workflows/deploy-frontend.yml` runs it before every deploy, so a broken
+lib module fails the build instead of shipping.
+
 Open the app, paste a Sleeper League ID (the long number in your league's URL, e.g.
 `sleeper.com/leagues/918876425783136256/team`), and pick your team from the dropdown once it loads to see
 roster-specific analysis. Works for both redraft and dynasty/keeper leagues.
@@ -102,6 +111,8 @@ src/
                               VOR computed client-side the same way the backend's POST endpoints do it
   hooks/useDraftPicks.ts     Draft picks with a manual (non-polling) live refresh
   hooks/useSeasonTransactions.ts  Every week's transactions this season (FAAB history + League DNA)
+  hooks/useLeagueHistory.ts  Walks previous_league_id for prior seasons' rosters/users/draft/bracket
+  lib/*.test.ts              Vitest unit tests for every pure lib/ module above (run: npm test)
   components/tabs/           One component per dashboard tab
   components/ui/             Shared table/card/badge primitives
 ```
@@ -182,7 +193,9 @@ need to exist first, and now they do.
   across multiple real seasons, so the model's documented behavior can be checked for whether it holds up
   out-of-sample rather than taken on faith for one season. That validates the projection/VOR *model*, not any
   drafting *strategy* — a narrower and more honest claim.
-- **Real LLM analyst layer** — see the section above; an intentional scope decision, not an oversight.
+- **Real LLM analyst layer** — see the section above. Explicitly declined (not just deferred): asked and the
+  answer was no, since it would need the user's own Anthropic API key and incur real per-request cost on their
+  account for a feature the rules-based layer already covers.
 
 ## Tech stack
 
