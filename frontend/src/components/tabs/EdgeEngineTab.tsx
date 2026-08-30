@@ -6,7 +6,9 @@ import type { SeasonSimulationState } from '../../hooks/useSeasonSimulation';
 import type { DraftPicksState } from '../../hooks/useDraftPicks';
 import type { ProjectionPoolState } from '../../hooks/useProjectionPool';
 import { computeEdgeSignals, type EdgeSignal } from '../../lib/edgeEngine';
+import { buildActionCenter } from '../../lib/actionCenter';
 import { Card, CardTitle } from '../ui/Card';
+import { Badge } from '../ui/Badge';
 
 const STATUS_STYLE: Record<EdgeSignal['status'], string> = {
   edge: 'border-emerald-700/60 bg-emerald-950/20',
@@ -58,6 +60,13 @@ export function EdgeEngineTab({
     [myRosterId, data.league, seasonSim.result, rosterHealth.result, waiverTargets.result, draft, draftPicks.picks, pool.bySleeperId],
   );
 
+  const myTeam = myRosterId != null && rosterHealth.result ? rosterHealth.result.teams.find((t) => t.roster_id === myRosterId) ?? null : null;
+  const bestWaiverTarget = waiverTargets.result?.targets[0] ?? null;
+  const actionItems = useMemo(
+    () => buildActionCenter({ edgeSignals: signals, myTeam, bestWaiverTarget }),
+    [signals, myTeam, bestWaiverTarget],
+  );
+
   if (!userId) {
     return (
       <Card>
@@ -69,6 +78,22 @@ export function EdgeEngineTab({
 
   return (
     <div className="space-y-6">
+      {actionItems.length > 0 && (
+        <Card>
+          <CardTitle subtitle="Rules-based synthesis of the numbers this app already computed elsewhere - not a language model call, so it cannot invent a figure that isn't already backed by real data.">
+            Action Center
+          </CardTitle>
+          <ol className="space-y-2">
+            {actionItems.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-slate-200">
+                <Badge color={item.severity === 'high' ? 'red' : item.severity === 'medium' ? 'orange' : 'gray'}>{item.category}</Badge>
+                <span>{item.text}</span>
+              </li>
+            ))}
+          </ol>
+        </Card>
+      )}
+
       <Card>
         <CardTitle subtitle="Every number here is a comparison between two values already computed elsewhere in this app (Season Outlook, Roster Value, Draft Assistant, Waiver Wire) - nothing new is invented. A signal that can't be backed by real data says so instead of showing a number.">
           Where You Have an Edge
