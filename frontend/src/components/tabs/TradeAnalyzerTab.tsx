@@ -4,10 +4,17 @@ import type { RosterHealthState } from '../../hooks/useRosterHealth';
 import type { SeasonSimulationState } from '../../hooks/useSeasonSimulation';
 import { evaluateTrade, type TradeImpact, type TradePlayerInfo } from '../../lib/tradeSimulator';
 import { explainTrade } from '../../lib/explain';
-import { Card, CardTitle, StatTile } from '../ui/Card';
+import { Card, CardTitle } from '../ui/Card';
+import { Mascot } from '../ui/Mascot';
+import { Meter, type MeterTone } from '../ui/Meter';
 
 function pct(x: number): string {
   return `${(x * 100).toFixed(1)}%`;
+}
+
+/** Presentation-only: scales a starter-VOR delta onto the Meter's 0-100 fill (centered at 50 = no change). Not a real bounded metric. */
+function deltaToMeterFill(delta: number): number {
+  return Math.max(0, Math.min(100, 50 + delta * 5));
 }
 
 export function TradeAnalyzerTab({
@@ -107,9 +114,12 @@ export function TradeAnalyzerTab({
   return (
     <div className="space-y-6">
       <Card>
-        <CardTitle subtitle="Pick both teams, check the players moving each direction, then evaluate. Picks aren't valued yet — players only.">
-          Build a Trade
-        </CardTitle>
+        <div className="mb-3 flex items-center gap-3">
+          <Mascot state="trade" size={48} className="hidden shrink-0 sm:block" />
+          <CardTitle subtitle="Pick both teams, check the players moving each direction, then evaluate. Picks aren't valued yet — players only.">
+            Trade Center
+          </CardTitle>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           {([
             { label: 'Team A sends', rosterId: rosterAId, setRosterId: setRosterAId, roster: rosterA, out: outA, setOut: setOutA, other: rosterBId },
@@ -143,9 +153,9 @@ export function TradeAnalyzerTab({
         <button
           onClick={runEvaluation}
           disabled={!canEvaluate || computing}
-          className="mt-4 min-h-[44px] rounded-md bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-4 min-h-[44px] rounded border-2 border-violet-400/60 bg-violet-600 px-4 py-2.5 font-display text-[10px] tracking-wide text-slate-950 uppercase transition-transform hover:bg-violet-500 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {computing ? 'Simulating…' : 'Evaluate Trade'}
+          {computing ? <span className="terminal-cursor">Simulating</span> : 'Evaluate Trade'}
         </button>
       </Card>
 
@@ -153,11 +163,26 @@ export function TradeAnalyzerTab({
         <>
           <Card>
             <CardTitle>Roster Value Impact</CardTitle>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatTile label={`${impact.sideA.teamName} before`} value={impact.sideA.beforeStarterVor.toFixed(2)} hint="starter VOR/gm" />
-              <StatTile label={`${impact.sideA.teamName} after`} value={impact.sideA.afterStarterVor.toFixed(2)} hint={`${impact.sideA.vorDelta >= 0 ? '+' : ''}${impact.sideA.vorDelta.toFixed(2)} change`} />
-              <StatTile label={`${impact.sideB.teamName} before`} value={impact.sideB.beforeStarterVor.toFixed(2)} hint="starter VOR/gm" />
-              <StatTile label={`${impact.sideB.teamName} after`} value={impact.sideB.afterStarterVor.toFixed(2)} hint={`${impact.sideB.vorDelta >= 0 ? '+' : ''}${impact.sideB.vorDelta.toFixed(2)} change`} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[
+                { side: impact.sideA },
+                { side: impact.sideB },
+              ].map(({ side }, i) => {
+                const tone: MeterTone = side.vorDelta > 0.05 ? 'positive' : side.vorDelta < -0.05 ? 'negative' : 'neutral';
+                return (
+                  <div key={i} className="rounded border border-slate-800 bg-slate-950/40 p-3">
+                    <div className="font-mono text-xs font-semibold tracking-wide text-slate-300 uppercase">{side.teamName}</div>
+                    <div className="mt-2">
+                      <Meter
+                        value={deltaToMeterFill(side.vorDelta)}
+                        displayValue={`${side.beforeStarterVor.toFixed(2)} → ${side.afterStarterVor.toFixed(2)}`}
+                        tone={tone}
+                        sublabel={`${side.vorDelta >= 0 ? '+' : ''}${side.vorDelta.toFixed(2)} starter VOR/gm`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Card>
 
@@ -166,18 +191,44 @@ export function TradeAnalyzerTab({
               <CardTitle subtitle="Re-runs the same Monte Carlo season simulator used in Season Outlook, with each team's modeled weekly score shifted by the VOR delta above.">
                 Championship Probability Impact
               </CardTitle>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {impact.probabilityImpactA && (
-                  <>
-                    <StatTile label={`${impact.sideA.teamName} Playoff Odds`} value={`${pct(impact.probabilityImpactA.before.playoff)} → ${pct(impact.probabilityImpactA.after.playoff)}`} />
-                    <StatTile label={`${impact.sideA.teamName} Championship Odds`} value={`${pct(impact.probabilityImpactA.before.championship)} → ${pct(impact.probabilityImpactA.after.championship)}`} />
-                  </>
+                  <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+                    <div className="font-mono text-xs font-semibold tracking-wide text-slate-300 uppercase">{impact.sideA.teamName}</div>
+                    <div className="mt-2 space-y-2">
+                      <Meter
+                        label="Playoff Odds"
+                        value={impact.probabilityImpactA.after.playoff * 100}
+                        displayValue={`${pct(impact.probabilityImpactA.before.playoff)} → ${pct(impact.probabilityImpactA.after.playoff)}`}
+                        tone={impact.probabilityImpactA.after.playoff >= impact.probabilityImpactA.before.playoff ? 'positive' : 'negative'}
+                      />
+                      <Meter
+                        label="Championship Odds"
+                        value={impact.probabilityImpactA.after.championship * 100}
+                        displayValue={`${pct(impact.probabilityImpactA.before.championship)} → ${pct(impact.probabilityImpactA.after.championship)}`}
+                        tone={impact.probabilityImpactA.after.championship >= impact.probabilityImpactA.before.championship ? 'positive' : 'negative'}
+                      />
+                    </div>
+                  </div>
                 )}
                 {impact.probabilityImpactB && (
-                  <>
-                    <StatTile label={`${impact.sideB.teamName} Playoff Odds`} value={`${pct(impact.probabilityImpactB.before.playoff)} → ${pct(impact.probabilityImpactB.after.playoff)}`} />
-                    <StatTile label={`${impact.sideB.teamName} Championship Odds`} value={`${pct(impact.probabilityImpactB.before.championship)} → ${pct(impact.probabilityImpactB.after.championship)}`} />
-                  </>
+                  <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+                    <div className="font-mono text-xs font-semibold tracking-wide text-slate-300 uppercase">{impact.sideB.teamName}</div>
+                    <div className="mt-2 space-y-2">
+                      <Meter
+                        label="Playoff Odds"
+                        value={impact.probabilityImpactB.after.playoff * 100}
+                        displayValue={`${pct(impact.probabilityImpactB.before.playoff)} → ${pct(impact.probabilityImpactB.after.playoff)}`}
+                        tone={impact.probabilityImpactB.after.playoff >= impact.probabilityImpactB.before.playoff ? 'positive' : 'negative'}
+                      />
+                      <Meter
+                        label="Championship Odds"
+                        value={impact.probabilityImpactB.after.championship * 100}
+                        displayValue={`${pct(impact.probabilityImpactB.before.championship)} → ${pct(impact.probabilityImpactB.after.championship)}`}
+                        tone={impact.probabilityImpactB.after.championship >= impact.probabilityImpactB.before.championship ? 'positive' : 'negative'}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </Card>
