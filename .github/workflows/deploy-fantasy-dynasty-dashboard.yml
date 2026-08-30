@@ -37,7 +37,26 @@ jobs:
         working-directory: fantasy-dynasty-dashboard
         env:
           GITHUB_PAGES: 'true'
+          # Base URL of the deployed Python VOR backend (see /fantasy-backend).
+          # Set this as a repository *variable* named VITE_API_BASE_URL
+          # (Settings -> Secrets and variables -> Actions -> Variables). It is a
+          # public URL baked into client-side JS, so it is not a secret and does
+          # not belong in Secrets.
+          #
+          # If unset, the build still succeeds and the roster view reports that
+          # the backend is unconfigured rather than showing numbers it cannot
+          # compute.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: npm run build
+
+      - name: Report backend wiring
+        working-directory: fantasy-dynasty-dashboard
+        run: |
+          if [ -z "${{ vars.VITE_API_BASE_URL }}" ]; then
+            echo "::warning::VITE_API_BASE_URL is not set - the deployed site will show 'backend not configured' on the roster view. Set it as a repository variable once the backend is deployed."
+          else
+            echo "Built against backend: ${{ vars.VITE_API_BASE_URL }}"
+          fi
 
       - uses: actions/configure-pages@v5
 

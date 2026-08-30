@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LeagueData } from '../../hooks/useLeagueData';
+import type { Position } from '../../types';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { Badge } from '../ui/Badge';
+import { peakAgeRange, retirementRisk } from '../../lib/agingCurves';
 import {
   fetchRosterHealth,
   isBackendConfigured,
@@ -102,6 +104,54 @@ export function RosterHealthTab({ data, userId }: { data: LeagueData; userId: st
   const myRosterId = userId ? data.rosters.find((r) => r.owner_id === userId)?.roster_id ?? null : null;
   const activeId = selectedId ?? myRosterId ?? resp?.teams[0]?.roster_id ?? null;
   const team = resp?.teams.find((t) => t.roster_id === activeId) ?? null;
+
+  // Age profile for the selected roster. This is the part of the old Aging
+  // Curves tab that actually informs a dynasty decision - average age against
+  // the positional peak window, and who is past the decline cliff. The
+  // standalone chart it came from was pretty but rarely load-bearing.
+  const ageProfile = useMemo(() => {
+    if (activeId === null) return null;
+    const roster = data.rosters.find((r) => r.roster_id === activeId);
+    if (!roster) return null;
+
+    const byPos = new Map<Position, number[]>();
+    const declining: { name: string; position: string; age: number; risk: string; reason: string }[] = [];
+
+    for (const id of roster.players ?? []) {
+      const p = data.players[id];
+      if (!p?.age || !p.position) continue;
+      const pos = p.position as Position;
+      byPos.set(pos, [...(byPos.get(pos) ?? []), p.age]);
+      const risk = retirementRisk(p.position, p.age);
+      if (risk.risk !== 'low') {
+        declining.push({
+          name: p.full_name || `${p.first_name} ${p.last_name}`,
+          position: p.position,
+          age: p.age,
+          risk: risk.risk,
+          reason: risk.reason,
+        });
+      }
+    }
+
+    const positions = Array.from(byPos.entries())
+      .map(([position, ages]) => {
+        const avg = ages.reduce((s, a) => s + a, 0) / ages.length;
+        const { start, end } = peakAgeRange(position);
+        return {
+          position,
+          avgAge: avg,
+          count: ages.length,
+          peakStart: start,
+          peakEnd: end,
+          relativeToPeak: avg < start ? 'ascending' : avg > end ? 'past peak' : 'in peak',
+        };
+      })
+      .sort((a, b) => a.position.localeCompare(b.position));
+
+    declining.sort((a, b) => (a.risk === 'high' ? -1 : 1) - (b.risk === 'high' ? -1 : 1) || b.age - a.age);
+    return { positions, declining };
+  }, [activeId, data.rosters, data.players]);
 
   // ---------------------------------------------------------------- unconfigured
   if (!isBackendConfigured()) {
@@ -349,6 +399,51 @@ export function RosterHealthTab({ data, userId }: { data: LeagueData; userId: st
                 </div>
               </Card>
             </>
+          )}
+
+          {/* -------------------------------------------- age profile (folded in from Aging Curves) */}
+          {team && ageProfile && ageProfile.positions.length > 0 && (
+            <Card>
+              <CardTitle subtitle="Average age at each position against that position's typical peak window — the dynasty question VOR alone doesn't answer.">
+                Age Profile
+              </CardTitle>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {ageProfile.positions.map((p) => (
+                  <StatTile
+                    key={p.position}
+                    label={`${p.position} (${p.count})`}
+                    value={p.avgAge.toFixed(1)}
+                    hint={`peak ${p.peakStart}-${p.peakEnd} · ${p.relativeToPeak}`}
+                  />
+                ))}
+              </div>
+              {ageProfile.declining.length > 0 && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Elevated decline risk</p>
+                  <div className="space-y-1.5">
+                    {ageProfile.declining.map((d) => (
+                      <div
+                        key={`${d.name}-${d.age}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 px-3 py-2 text-sm"
+                      >
+                        <span className="text-slate-200">
+                          {d.name}
+                          <span className="ml-1.5 text-xs text-slate-500">{d.position} · {d.age}y</span>
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">{d.reason}</span>
+                          <Badge color={d.risk === 'high' ? 'red' : 'yellow'}>{d.risk.toUpperCase()}</Badge>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="mt-3 text-[11px] text-slate-600">
+                Ages from Sleeper; peak windows and decline thresholds are positional aging models in
+                <code className="mx-1 rounded bg-slate-800 px-1">lib/agingCurves.ts</code>, not per-player forecasts.
+              </p>
+            </Card>
           )}
 
           {/* -------------------------------------------- baselines + methodology */}
