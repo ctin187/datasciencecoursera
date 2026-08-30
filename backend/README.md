@@ -25,7 +25,19 @@ Validate before trusting any number:
 ```bash
 python scripts/validate.py                    # offline suite (runs anywhere)
 python scripts/validate_vs_sleeper.py --season 2025 --week 12   # needs Sleeper access
+python scripts/backtest_multi_season.py --seasons 2022,2023,2024,2025   # does the model hold up across years?
 ```
+
+`backtest_multi_season.py` runs the same projection-accuracy and replacement-level-believability
+checks as `validate.py`, once per season, so the single-season results below can be checked against
+prior years instead of taken on faith. It validates the projection/VOR **model** only — not any
+draft strategy (zero-RB, wait-on-QB, VORP drafting, etc.), which would need real historical ADP data
+this project has no legitimate free source for. It is not part of the deployed API (loading several
+seasons of stats at once is exactly the memory cost the API's single-season `SEASONS` scoping in
+`config.py` exists to avoid on Render's free tier) — run it locally or in CI. Its logic was dry-run
+against a synthetic multi-season dataset during development (real `app.projections`/`app.scoring`/
+`app.vor` code, fabricated stat lines) to confirm it executes correctly end-to-end, but never against
+real nflverse data — this build environment has no network access to nflverse's release assets.
 
 ## Endpoints
 

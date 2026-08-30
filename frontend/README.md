@@ -52,6 +52,10 @@ feature — a tab that can't back a number with real data says so instead of sho
   app doesn't have), trade frequency, and FAAB spend, each with a percentile rank among your league mates.
   Every profile states its sample size (one draft, one season of transactions) rather than implying more
   track record than the data supports.
+- **Franchise History** — real per-season standings, champions, and runner-ups, walked from Sleeper's own
+  `previous_league_id` chain (bounded to a handful of seasons to keep the request count reasonable). Champion
+  comes from that season's actual playoff bracket where available; a season without one falls back to best
+  regular-season record, labeled as such rather than asserted as the real playoff result.
 
 ## Getting started
 
@@ -160,10 +164,12 @@ need to exist first, and now they do.
 
 ## Roadmap (not yet built)
 
-- **Multi-season history** — League DNA and the draft/waiver views currently see only this season's draft and
-  transactions (one `getDrafts`/`getTransactions` call each). Walking a league's `previous_league_id` chain to
-  pull prior seasons would deepen sample sizes and let League DNA show real trend lines instead of a single
-  season's snapshot.
+- **League DNA still keyed to one season.** Franchise History now walks `previous_league_id` back several
+  seasons for real standings/champions, but League DNA's draft/transaction tendencies are still computed from
+  the *current* season's draft and transactions only. Deepening it means aggregating historical draft picks by
+  `owner_id` across seasons (roster_id numbering is not stable season to season — see
+  `hooks/useLeagueHistory.ts`'s docstring), not a large lift on top of what Franchise History already fetches,
+  just not done yet.
 - **ADP / consensus rankings from a real, refreshable source.** Nothing here today (an earlier iteration
   shipped a hand-curated seed dataset; it was removed as a violation of this project's own anti-fabrication
   rule — see Data sources above). Without it, two spec features stay explicitly out of scope rather than
@@ -171,12 +177,14 @@ need to exist first, and now they do.
   vs. model-value mispricing (a true "Market Inefficiency Engine").
 - **Monte Carlo draft simulation** (opponent-pick modeling, pick-availability probabilities) — blocked on the
   same missing ADP/variance data as the point above.
-- **Backtesting framework** — validating draft/trade strategies (VORP drafting, zero-RB, wait-on-QB, etc.)
-  against historical seasons. The backend's projection *model* is already backtested (see
-  `/backend/README.md` — MAE by position against a held-out week, compared to a published-benchmark band),
-  but a strategy backtester needs multiple seasons of historical rosters/draft results/outcomes, which is a
-  meaningfully larger data-engineering lift than anything above (the backend currently scopes ingestion to a
-  single season deliberately, to fit the free-tier memory budget it deploys to) and hasn't been started.
+- **Draft-strategy backtesting** (VORP drafting, zero-RB, wait-on-QB, etc. tested against historical seasons)
+  — still not implemented, and can't be honestly implemented without real historical ADP (same blocker as
+  above): comparing a strategy against "what else was available" requires knowing what was actually available
+  at each historical pick. What *is* now implemented, in `/backend/scripts/backtest_multi_season.py`: the same
+  projection-accuracy and replacement-level-believability checks `validate.py` runs for 2025 alone, looped
+  across multiple real seasons, so the model's documented behavior can be checked for whether it holds up
+  out-of-sample rather than taken on faith for one season. That validates the projection/VOR *model*, not any
+  drafting *strategy* — a narrower and more honest claim.
 - **Real LLM analyst layer** — see the section above; an intentional scope decision, not an oversight.
 
 ## Tech stack
