@@ -38,24 +38,25 @@ jobs:
         env:
           GITHUB_PAGES: 'true'
           # Base URL of the deployed Python VOR backend (see /fantasy-backend).
-          # Set this as a repository *variable* named VITE_API_BASE_URL
-          # (Settings -> Secrets and variables -> Actions -> Variables). It is a
-          # public URL baked into client-side JS, so it is not a secret and does
-          # not belong in Secrets.
           #
-          # If unset, the build still succeeds and the roster view reports that
-          # the backend is unconfigured rather than showing numbers it cannot
-          # compute.
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          # Defaults to the project's own Render service. This is deliberately a
+          # committed default rather than a required setup step: the value is a
+          # public URL that gets baked into client-side JS on every build, so it
+          # is not a secret and hiding it buys nothing.
+          #
+          # To point the site at a different backend, set a repository
+          # *variable* named VITE_API_BASE_URL (Settings -> Secrets and
+          # variables -> Actions -> Variables). It overrides the default below.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://fantasy-dynasty-backend.onrender.com' }}
         run: npm run build
 
       - name: Report backend wiring
-        working-directory: fantasy-dynasty-dashboard
         run: |
           if [ -z "${{ vars.VITE_API_BASE_URL }}" ]; then
-            echo "::warning::VITE_API_BASE_URL is not set - the deployed site will show 'backend not configured' on the roster view. Set it as a repository variable once the backend is deployed."
+            echo "Built against the default backend: https://fantasy-dynasty-backend.onrender.com"
+            echo "::notice::Using the committed default backend URL. Set a VITE_API_BASE_URL repository variable to override it."
           else
-            echo "Built against backend: ${{ vars.VITE_API_BASE_URL }}"
+            echo "Built against backend from repo variable: ${{ vars.VITE_API_BASE_URL }}"
           fi
 
       - uses: actions/configure-pages@v5
