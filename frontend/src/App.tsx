@@ -195,7 +195,9 @@ export default function App() {
               <WaiverWireTab data={data} userId={activeUserId} waivers={waiverTargets} pool={projectionPool} faab={seasonTransactions} />
             )}
             {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
-            {tab === 'dna' && <LeagueDnaTab data={data} draftPicks={draftPicks} transactions={seasonTransactions} />}
+            {tab === 'dna' && (
+              <LeagueDnaTab data={data} draftPicks={draftPicks} transactions={seasonTransactions} history={leagueHistory} />
+            )}
             {tab === 'history' && <FranchiseHistoryTab history={leagueHistory} userId={activeUserId} />}
           </>
         )}

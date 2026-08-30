@@ -47,11 +47,14 @@ feature — a tab that can't back a number with real data says so instead of sho
 - **Season Outlook** — Monte Carlo playoff and championship probability (default 4,000 simulated seasons),
   built entirely from real Sleeper matchup results. See "Season Outlook: method & limitations" below.
 - **League DNA** — per-manager behavioral profiles built from this league's own draft picks and transactions
-  only: positional draft tendency (rounds earlier/later than *this league's own average* for that position —
-  a real, self-referential signal, since a market-relative "reach vs. ADP" metric needs external ADP data this
-  app doesn't have), trade frequency, and FAAB spend, each with a percentile rank among your league mates.
-  Every profile states its sample size (one draft, one season of transactions) rather than implying more
-  track record than the data supports.
+  only. Positional draft tendency (rounds earlier/later than *this league's own average* for that position — a
+  real, self-referential signal, since a market-relative "reach vs. ADP" metric needs external ADP data this
+  app doesn't have) is pooled across every season Franchise History's `previous_league_id` walk found, keyed
+  by `owner_id` since Sleeper's `roster_id` numbering isn't stable season to season. Trade frequency and FAAB
+  spend stay current-season-only (fetching full transaction history per prior season isn't done, to bound the
+  API call count), each with a percentile rank among your league mates. Every profile states its sample size —
+  picks across N seasons, one season of transactions — rather than implying more track record than the data
+  supports.
 - **Franchise History** — real per-season standings, champions, and runner-ups, walked from Sleeper's own
   `previous_league_id` chain (bounded to a handful of seasons to keep the request count reasonable). Champion
   comes from that season's actual playoff bracket where available; a season without one falls back to best
@@ -164,12 +167,6 @@ need to exist first, and now they do.
 
 ## Roadmap (not yet built)
 
-- **League DNA still keyed to one season.** Franchise History now walks `previous_league_id` back several
-  seasons for real standings/champions, but League DNA's draft/transaction tendencies are still computed from
-  the *current* season's draft and transactions only. Deepening it means aggregating historical draft picks by
-  `owner_id` across seasons (roster_id numbering is not stable season to season — see
-  `hooks/useLeagueHistory.ts`'s docstring), not a large lift on top of what Franchise History already fetches,
-  just not done yet.
 - **ADP / consensus rankings from a real, refreshable source.** Nothing here today (an earlier iteration
   shipped a hand-curated seed dataset; it was removed as a violation of this project's own anti-fabrication
   rule — see Data sources above). Without it, two spec features stay explicitly out of scope rather than
