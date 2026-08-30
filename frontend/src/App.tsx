@@ -145,7 +145,7 @@ export default function App() {
           <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-10 text-center text-slate-400">
             <p className="text-lg font-medium text-slate-200">Enter your Sleeper League ID to get started</p>
             <p className="mt-2 text-sm">
-              Find it in your league URL on sleeper.com, e.g. <code className="rounded bg-slate-800 px-1.5 py-0.5">
+              Find it in your league URL on sleeper.com, e.g. <code className="break-all rounded bg-slate-800 px-1.5 py-0.5">
                 sleeper.com/leagues/<b>918876425783136256</b>/team
               </code>
             </p>
