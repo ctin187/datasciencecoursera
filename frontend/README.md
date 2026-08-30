@@ -1,4 +1,4 @@
-# Fantasy Decision Intelligence Dashboard
+# Gridiron Terminal
 
 A league-specific quantitative decision-support tool for Sleeper fantasy football — not a generic rankings
 site. Paste a Sleeper League ID and the app pulls that league's real settings, rosters, users, matchups, and
@@ -8,6 +8,16 @@ Monte Carlo playoff/championship probability from actual matchup history.
 
 This is being built in phases (see Roadmap below). Nothing here is a placeholder dressed up as a finished
 feature — a tab that can't back a number with real data says so instead of showing one.
+
+## Visual identity
+
+The presentation layer is deliberately retro: an 80s/90s arcade-football-cabinet look (pixel display font,
+CRT scanlines, arcade power-meters, an original pixel-art mascot) wrapped around the same serious analytics
+engine described below. It's a skin, not a rewrite — every tab's data flow, hooks, and calculations are
+untouched by the redesign. See `src/index.css`'s header comment and `components/ui/{Card,Badge,DataTable,
+Meter,Mascot,ChampionshipMeter}.tsx` for the design system; `CRT: ON/OFF` in the header toggles the
+scanline/vignette overlay (persisted to localStorage), and the flicker animation respects
+`prefers-reduced-motion` regardless of that toggle.
 
 ## Features (implemented)
 

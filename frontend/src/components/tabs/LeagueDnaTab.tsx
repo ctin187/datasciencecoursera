@@ -7,6 +7,7 @@ import { buildLeagueDna, type ManagerProfile, type SeasonDraftData } from '../..
 import { Card, CardTitle } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
+import { Meter } from '../ui/Meter';
 
 function fmtDelta(d: number): string {
   return `${d >= 0 ? '+' : ''}${d.toFixed(1)} rounds`;
@@ -76,7 +77,7 @@ export function LeagueDnaTab({
         <CardTitle
           subtitle={`Draft tendencies are pooled across ${seasonsFetched} season${seasonsFetched === 1 ? '' : 's'} of real draft data (Franchise History's previous_league_id walk). Trade/waiver/FAAB activity is this season only. No ADP, no external market comparison anywhere here - only this league's own data.`}
         >
-          League DNA
+          League Intelligence
         </CardTitle>
         {loading && <p className="mb-3 text-xs text-slate-500">Loading draft and transaction history…</p>}
         {draftPicks.error && <p className="mb-3 text-xs text-rose-400">{draftPicks.error}</p>}
@@ -102,6 +103,12 @@ export function LeagueDnaTab({
                     </span>
                   </div>
                 ))}
+              </div>
+              <div className="mt-3 space-y-2 border-t border-slate-800 pt-3">
+                <Meter label="Trade Activity" value={p.tradesPercentile} displayValue={`${p.tradesPercentile}/100`} tone={p.tradesPercentile >= 50 ? 'live' : 'neutral'} segments={10} />
+                {p.faabSpentPct != null && (
+                  <Meter label="Waiver Aggression" value={p.faabPercentile ?? 0} displayValue={`${p.faabPercentile}/100`} tone={(p.faabPercentile ?? 0) >= 50 ? 'live' : 'neutral'} segments={10} />
+                )}
               </div>
             </Card>
           ))}

@@ -7,6 +7,13 @@ import { explainDraftPick } from '../../lib/explain';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
+import { Mascot } from '../ui/Mascot';
+import { Meter } from '../ui/Meter';
+
+/** Presentation-only: scales a marginal-VOR pick recommendation onto the Meter's 0-100 fill. Not a real bounded metric. */
+function marginalToMeterFill(v: number | null): number {
+  return Math.max(0, Math.min(100, (v ?? 0) * 7));
+}
 
 function fmt(n: number | null): string {
   return n === null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
@@ -90,9 +97,12 @@ export function DraftAssistantTab({
   return (
     <div className="space-y-6">
       <Card>
-        <CardTitle subtitle={`Draft type: ${draft.type}${board?.isNomination ? ' (nomination order shown, not a strict turn clock)' : ''}`}>
-          Draft Status
-        </CardTitle>
+        <div className="mb-3 flex items-center gap-3">
+          <Mascot state="draft" size={48} className="hidden shrink-0 sm:block" />
+          <CardTitle subtitle={`Draft type: ${draft.type}${board?.isNomination ? ' (nomination order shown, not a strict turn clock)' : ''}`}>
+            Draft Command
+          </CardTitle>
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Status" value={<Badge color="purple">{draft.status.replace('_', ' ')}</Badge>} />
           <StatTile label="Picks Made" value={board?.picksMade ?? 0} />
@@ -102,7 +112,7 @@ export function DraftAssistantTab({
         <button
           onClick={refresh}
           disabled={refreshing}
-          className="mt-3 min-h-[36px] rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+          className="mt-3 min-h-[36px] rounded border border-slate-700 px-3 py-1.5 font-mono text-[11px] font-semibold tracking-wide text-slate-300 uppercase hover:border-violet-600 hover:text-violet-400 disabled:opacity-50"
         >
           {refreshing ? 'Refreshing…' : 'Refresh Picks'}
         </button>
@@ -131,6 +141,15 @@ export function DraftAssistantTab({
       {myRosterId != null && byMarginal.length > 0 && (
         <Card>
           <CardTitle>Recommendation</CardTitle>
+          <div className="mb-4">
+            <Meter
+              label={`Take ${byMarginal[0].name ?? byMarginal[0].sleeperId}`}
+              value={marginalToMeterFill(byMarginal[0].marginalValueForMyTeam)}
+              displayValue={`${fmt(byMarginal[0].marginalValueForMyTeam)} marginal VOR`}
+              tone="positive"
+              sublabel={byMarginal[0].position ?? undefined}
+            />
+          </div>
           <ul className="space-y-1.5 text-sm text-slate-300">
             {explainDraftPick(byMarginal, available).map((line, i) => (
               <li key={i}>• {line}</li>
@@ -142,12 +161,12 @@ export function DraftAssistantTab({
       {available.length > 0 && (
         <Card>
           <CardTitle subtitle={`${available.length} undrafted players with a projection. "Marginal value for you" is computed for the top 40 by VOR only, to keep this fast.`}>
-            Available Players
+            Best Available
           </CardTitle>
           <div className="mb-3 flex flex-wrap gap-1.5">
             <button
               onClick={() => setPosFilter('ALL')}
-              className={`rounded-full border px-2.5 py-1 text-xs font-medium ${posFilter === 'ALL' ? 'border-violet-500 bg-violet-500/20 text-violet-300' : 'border-slate-700 text-slate-400'}`}
+              className={`rounded border px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase ${posFilter === 'ALL' ? 'border-violet-500 bg-violet-500/20 text-violet-300' : 'border-slate-700 text-slate-400'}`}
             >
               ALL
             </button>
@@ -155,7 +174,7 @@ export function DraftAssistantTab({
               <button
                 key={pos}
                 onClick={() => setPosFilter(pos)}
-                className={`rounded-full border px-2.5 py-1 text-xs font-medium ${posFilter === pos ? 'border-violet-500 bg-violet-500/20 text-violet-300' : 'border-slate-700 text-slate-400'}`}
+                className={`rounded border px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase ${posFilter === pos ? 'border-violet-500 bg-violet-500/20 text-violet-300' : 'border-slate-700 text-slate-400'}`}
               >
                 {pos}
               </button>

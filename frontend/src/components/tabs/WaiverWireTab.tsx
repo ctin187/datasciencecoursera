@@ -8,9 +8,16 @@ import { extractFaabHistory, computeRateDistribution, suggestBid } from '../../l
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
+import { Mascot } from '../ui/Mascot';
+import { Meter } from '../ui/Meter';
 
 function fmt(n: number | null): string {
   return n === null ? '—' : n.toFixed(1);
+}
+
+/** Presentation-only: scales a VOR/gm score onto the Meter's 0-100 fill. Not a real bounded metric - just a visual proportional to the same number shown next to it. */
+function vorToMeterFill(vor: number | null): number {
+  return Math.max(0, Math.min(100, (vor ?? 0) * 9));
 }
 
 function directionBadge(direction: 'rising' | 'falling' | 'stable' | null) {
@@ -151,13 +158,35 @@ export function WaiverWireTab({
     { key: 'status', header: 'Status', accessor: (b) => (b.below_replacement ? 1 : 0), align: 'center', render: (b) => (b.below_replacement ? <Badge color="red">Below replacement — drop candidate</Badge> : <Badge color="green">Roster-worthy</Badge>) },
   ];
 
+  const topTarget = result.targets[0];
+
   return (
     <div className="space-y-6">
+      {topTarget && (
+        <Card>
+          <div className="flex items-center gap-4">
+            <Mascot state="waiver" size={56} className="hidden shrink-0 sm:block" />
+            <div className="min-w-0 flex-1">
+              <div className="font-display text-[9px] tracking-wide text-violet-400">TOP WAIVER RADAR SIGNAL</div>
+              <div className="mt-1 truncate font-scoreboard text-2xl text-slate-100">{topTarget.name ?? topTarget.sleeper_id}</div>
+              <div className="mt-2">
+                <Meter
+                  value={vorToMeterFill(topTarget.vor_per_game)}
+                  displayValue={topTarget.vor_per_game != null ? `${topTarget.vor_per_game >= 0 ? '+' : ''}${fmt(topTarget.vor_per_game)} VOR/gm` : '—'}
+                  tone={(topTarget.vor_per_game ?? 0) > 0 ? 'positive' : 'negative'}
+                  sublabel={topTarget.position ?? undefined}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <CardTitle
           subtitle={`Season ${result.season}, as of week ${result.as_of_week}, ${result.games_remaining} games remaining. Ranked by value over this league's actual replacement level — not a generic "best player available" list.`}
         >
-          Waiver Targets ({result.count})
+          Waiver Radar ({result.count})
         </CardTitle>
         <p className="mb-3 text-xs text-slate-500">{result.methodology}</p>
         <DataTable rows={result.targets} columns={columns} rowKey={(t) => t.sleeper_id} defaultSortKey="vor" maxHeight={640} />
@@ -180,7 +209,15 @@ export function WaiverWireTab({
             <StatTile label="75th percentile" value={`$${faabDistribution.p75.toFixed(1)}/VOR`} />
           </div>
           {myBudgetRemaining !== null && (
-            <p className="mt-3 text-xs text-slate-500">Your remaining FAAB budget: ${myBudgetRemaining} — every suggested bid above is capped at this.</p>
+            <div className="mt-4">
+              <Meter
+                label="Your FAAB Remaining"
+                value={((data.league.settings.waiver_budget ?? 1) > 0 ? myBudgetRemaining / (data.league.settings.waiver_budget ?? 1) : 0) * 100}
+                displayValue={`$${myBudgetRemaining}`}
+                tone={myBudgetRemaining > (data.league.settings.waiver_budget ?? 0) * 0.3 ? 'positive' : 'warning'}
+              />
+              <p className="mt-2 text-xs text-slate-500">Every suggested bid above is capped at this.</p>
+            </div>
           )}
         </Card>
       )}

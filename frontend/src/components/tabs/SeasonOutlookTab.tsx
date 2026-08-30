@@ -4,6 +4,8 @@ import type { TeamSimResult } from '../../lib/seasonSimulator';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
+import { Mascot } from '../ui/Mascot';
+import { ChampionshipMeter } from '../ui/ChampionshipMeter';
 
 function pct(x: number): string {
   return `${(x * 100).toFixed(1)}%`;
@@ -15,7 +17,8 @@ export function SeasonOutlookTab({ data, userId, sim }: { data: LeagueData; user
   if (sim.loading) {
     return (
       <Card>
-        <p className="text-center text-slate-400">Fetching this season's matchup history and running the simulation…</p>
+        <p className="terminal-cursor text-center font-scoreboard text-lg text-violet-400">SIMULATING SEASONS</p>
+        <p className="mt-2 text-center text-xs text-slate-500">Fetching this season's matchup history and running the Monte Carlo simulation…</p>
       </Card>
     );
   }
@@ -36,10 +39,13 @@ export function SeasonOutlookTab({ data, userId, sim }: { data: LeagueData; user
     return (
       <Card>
         <CardTitle>Season Outlook</CardTitle>
-        <p className="text-slate-400">
-          No completed weeks with real scores yet, so there's no scoring history to simulate from. Check back once Week 1
-          has been played — the model refuses to invent a projection-based simulation in the meantime.
-        </p>
+        <div className="flex items-start gap-3">
+          <Mascot state="benched" size={48} className="shrink-0" />
+          <p className="text-slate-400">
+            No completed weeks with real scores yet, so there's no scoring history to simulate from. Check back once Week 1
+            has been played — the model refuses to invent a projection-based simulation in the meantime.
+          </p>
+        </div>
       </Card>
     );
   }
@@ -119,9 +125,15 @@ export function SeasonOutlookTab({ data, userId, sim }: { data: LeagueData; user
         </div>
       )}
 
+      {myTeam && result.status === 'ready' && (
+        <ChampionshipMeter probabilityPct={myTeam.championshipProbability * 100} simulations={result.simulations} caption={`YOUR CHAMPIONSHIP EQUITY — RANK #${myRank} OF ${result.teams.length}`} />
+      )}
+
       {myTeam && (
         <Card>
-          <CardTitle subtitle={`Rank #${myRank} of ${result.teams.length} by championship odds`}>Your Season Outlook</CardTitle>
+          <CardTitle subtitle={result.status === 'ready' ? `Rank #${myRank} of ${result.teams.length} by championship odds` : undefined}>
+            Your Season Outlook
+          </CardTitle>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile label="Record" value={`${myTeam.actualWins}-${myTeam.actualLosses}${myTeam.actualTies ? `-${myTeam.actualTies}` : ''}`} />
             <StatTile label="Playoff Probability" value={pct(myTeam.playoffProbability)} />
