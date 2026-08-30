@@ -45,13 +45,28 @@ cache that a daily background job populates.
 
 ## Deployment
 
-`render.yaml` and `Procfile` are included. On Render: new Web Service → point at
-this directory → it reads `render.yaml`. Set `CORS_ORIGINS` to your frontend
-origin (explicit list; the API never uses a wildcard).
+The Blueprint lives at the **repository root** (`/render.yaml`), not in this
+directory — Render only looks for `render.yaml` at the root, and points it here
+via `rootDir: fantasy-backend`.
 
-**This was not deployed for you** — that needs your Railway/Render credentials.
-The frontend reads `VITE_API_BASE_URL`; until that points at a live instance the
-Roster Health tab says so rather than showing numbers.
+1. render.com → **New +** → **Blueprint** → connect this repo.
+   It finds `/render.yaml` and fills in build command, start command, health
+   check and env vars. Pick the free plan and Apply.
+2. Copy the service URL it gives you (e.g. `https://fantasy-dynasty-backend.onrender.com`).
+3. In GitHub: **Settings → Secrets and variables → Actions → Variables** →
+   new variable `VITE_API_BASE_URL` = that URL. (A variable, not a secret — it's
+   a public URL baked into client-side JS.)
+4. **Actions → Deploy Fantasy Dynasty Dashboard → Run workflow.**
+
+Notes:
+- Free tier sleeps after ~15 min idle; the first request after that takes ~30s.
+- Ingest peaks around **334 MB** against the free tier's 512 MB, measured. That
+  headroom is why `SEASONS` defaults to a single season — see `config.py`.
+- The disk is ephemeral, so the parquet cache rebuilds on boot (about a minute).
+
+**This was not deployed for you** — that needs your own Render account. Until
+`VITE_API_BASE_URL` points at a live instance, the My Team and Waiver Wire tabs
+say so rather than showing numbers they can't compute.
 
 ---
 
