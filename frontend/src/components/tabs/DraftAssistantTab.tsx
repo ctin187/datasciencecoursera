@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { LeagueData } from '../../hooks/useLeagueData';
 import type { ProjectionPoolState } from '../../hooks/useProjectionPool';
-import { useDraftPicks } from '../../hooks/useDraftPicks';
+import type { DraftPicksState } from '../../hooks/useDraftPicks';
 import { computeDraftBoard, buildAvailableBoard, type AvailablePlayerRow } from '../../lib/draftAssistant';
 import { explainDraftPick } from '../../lib/explain';
 import { Card, CardTitle, StatTile } from '../ui/Card';
@@ -12,10 +12,20 @@ function fmt(n: number | null): string {
   return n === null ? '—' : `${n >= 0 ? '+' : ''}${n.toFixed(2)}`;
 }
 
-export function DraftAssistantTab({ data, userId, pool }: { data: LeagueData; userId: string; pool: ProjectionPoolState }) {
+export function DraftAssistantTab({
+  data,
+  userId,
+  pool,
+  draftPicks,
+}: {
+  data: LeagueData;
+  userId: string;
+  pool: ProjectionPoolState;
+  draftPicks: DraftPicksState;
+}) {
   const [posFilter, setPosFilter] = useState<string>('ALL');
   const draft = data.drafts.find((d) => d.league_id === data.league.league_id) ?? data.drafts[0];
-  const { picks, loading, error, refresh, refreshing } = useDraftPicks(draft?.draft_id ?? null);
+  const { picks, loading, error, refresh, refreshing } = draftPicks;
 
   const userById = new Map(data.users.map((u) => [u.user_id, u]));
   const teamName = (rosterId: number | null) => {

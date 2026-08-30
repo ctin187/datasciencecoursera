@@ -4,13 +4,15 @@ import { useSeasonSimulation } from './hooks/useSeasonSimulation';
 import { useRosterHealth } from './hooks/useRosterHealth';
 import { useWaiverTargets } from './hooks/useWaiverTargets';
 import { useProjectionPool } from './hooks/useProjectionPool';
-import { useFaabHistory } from './hooks/useFaabHistory';
+import { useSeasonTransactions } from './hooks/useSeasonTransactions';
+import { useDraftPicks } from './hooks/useDraftPicks';
 import { LeagueOverviewTab } from './components/tabs/LeagueOverviewTab';
 import { RosterValueTab } from './components/tabs/RosterValueTab';
 import { WaiverWireTab } from './components/tabs/WaiverWireTab';
 import { SeasonOutlookTab } from './components/tabs/SeasonOutlookTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
+import { LeagueDnaTab } from './components/tabs/LeagueDnaTab';
 
 // Four tabs. This app targets both redraft and dynasty/keeper Sleeper
 // leagues - League Overview auto-detects which one you're in (and every
@@ -29,6 +31,7 @@ const TABS = [
   { id: 'trade', label: 'Trade Analyzer' },
   { id: 'waivers', label: 'Waiver Wire' },
   { id: 'season', label: 'Season Outlook' },
+  { id: 'dna', label: 'League DNA' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -44,7 +47,9 @@ export default function App() {
   const rosterHealth = useRosterHealth(data, activeUserId);
   const waiverTargets = useWaiverTargets(data, activeUserId);
   const projectionPool = useProjectionPool(data?.league);
-  const faabHistory = useFaabHistory(activeLeagueId, data?.league);
+  const seasonTransactions = useSeasonTransactions(activeLeagueId, data?.league);
+  const activeDraft = data ? (data.drafts.find((d) => d.league_id === data.league.league_id) ?? data.drafts[0]) : undefined;
+  const draftPicks = useDraftPicks(activeDraft?.draft_id ?? null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,12 +172,13 @@ export default function App() {
             )}
             {tab === 'league' && <LeagueOverviewTab data={data} userId={activeUserId} />}
             {tab === 'roster' && <RosterValueTab data={data} userId={activeUserId} health={rosterHealth} />}
-            {tab === 'draft' && <DraftAssistantTab data={data} userId={activeUserId} pool={projectionPool} />}
+            {tab === 'draft' && <DraftAssistantTab data={data} userId={activeUserId} pool={projectionPool} draftPicks={draftPicks} />}
             {tab === 'trade' && <TradeAnalyzerTab data={data} health={rosterHealth} seasonSim={seasonSim} />}
             {tab === 'waivers' && (
-              <WaiverWireTab data={data} userId={activeUserId} waivers={waiverTargets} pool={projectionPool} faab={faabHistory} />
+              <WaiverWireTab data={data} userId={activeUserId} waivers={waiverTargets} pool={projectionPool} faab={seasonTransactions} />
             )}
             {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
+            {tab === 'dna' && <LeagueDnaTab data={data} draftPicks={draftPicks} transactions={seasonTransactions} />}
           </>
         )}
       </main>

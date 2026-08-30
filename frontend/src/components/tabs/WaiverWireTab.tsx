@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { LeagueData } from '../../hooks/useLeagueData';
 import type { WaiverTargetsState } from '../../hooks/useWaiverTargets';
 import type { ProjectionPoolState } from '../../hooks/useProjectionPool';
-import type { FaabHistoryState } from '../../hooks/useFaabHistory';
+import type { SeasonTransactionsState } from '../../hooks/useSeasonTransactions';
 import type { BenchPlayer, WaiverTarget } from '../../services/backendApi';
 import { extractFaabHistory, computeRateDistribution, suggestBid } from '../../lib/faabModel';
 import { Card, CardTitle, StatTile } from '../ui/Card';
@@ -31,7 +31,7 @@ export function WaiverWireTab({
   userId: string;
   waivers: WaiverTargetsState;
   pool: ProjectionPoolState;
-  faab: FaabHistoryState;
+  faab: SeasonTransactionsState;
 }) {
   const isFaabLeague = (data.league.settings.waiver_budget ?? 0) > 0;
   const myRoster = userId ? data.rosters.find((r) => r.owner_id === userId) : undefined;
