@@ -2,24 +2,23 @@ import { useState } from 'react';
 import { useLeagueData } from './hooks/useLeagueData';
 import { useDerivedData } from './hooks/useDerivedData';
 import { LeagueSettingsTab } from './components/tabs/LeagueSettingsTab';
-import { HomeTab } from './components/tabs/HomeTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { WaiversTab } from './components/tabs/WaiversTab';
-import { LineupOptimizerTab } from './components/tabs/LineupOptimizerTab';
-import { NewsFeedTab } from './components/tabs/NewsFeedTab';
-import { AgingCurvesTab } from './components/tabs/AgingCurvesTab';
 import { RosterHealthTab } from './components/tabs/RosterHealthTab';
 
+// Five tabs, deliberately. Roster health is ONE view (VOR) rather than the two
+// contradictory ones this app used to carry - a letter-grade Home tab and a
+// VOR deep dive that disagreed about how good your team was. Aging Curves is
+// folded into the roster view. News Feed and Lineup Optimizer are removed:
+// both depended on ESPN endpoints that were never verified reachable from a
+// real browser. They can come back proxied through the backend, where CORS
+// isn't a problem, if they earn their place.
 const TABS = [
-  { id: 'home', label: 'Home' },
+  { id: 'roster', label: 'My Team' },
   { id: 'draft', label: 'Draft Assistant' },
   { id: 'trade', label: 'Trade Analyzer' },
   { id: 'waivers', label: 'Waiver Wire' },
-  { id: 'lineup', label: 'Lineup Optimizer' },
-  { id: 'news', label: 'News Feed' },
-  { id: 'roster', label: 'Team Deep Dive' },
-  { id: 'aging', label: 'Aging Curves' },
   { id: 'league', label: 'League' },
 ] as const;
 
@@ -29,7 +28,7 @@ export default function App() {
   const [leagueIdInput, setLeagueIdInput] = useState('');
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>('');
-  const [tab, setTab] = useState<TabId>('home');
+  const [tab, setTab] = useState<TabId>('roster');
 
   const { data, loading, error, progress, refreshRosters, refreshingRosters } = useLeagueData(activeLeagueId);
   const derived = useDerivedData(data?.players);
@@ -152,17 +151,13 @@ export default function App() {
                 Showing cached data — the last live refresh failed, so some information may be stale.
               </div>
             )}
-            {tab === 'home' && <HomeTab data={data} derived={derived} userId={activeUserId} setTab={setTab} />}
-            {tab === 'league' && <LeagueSettingsTab data={data} userId={activeUserId} tradeValueMap={derived.tradeValueMap} />}
+            {tab === 'roster' && <RosterHealthTab data={data} userId={activeUserId} />}
             {tab === 'draft' && <DraftAssistantTab data={data} derived={derived} userId={activeUserId} />}
             {tab === 'trade' && (
               <TradeAnalyzerTab data={data} derived={derived} onRefreshRosters={refreshRosters} refreshingRosters={refreshingRosters} />
             )}
-            {tab === 'waivers' && <WaiversTab data={data} derived={derived} userId={activeUserId} />}
-            {tab === 'lineup' && <LineupOptimizerTab data={data} derived={derived} userId={activeUserId} />}
-            {tab === 'news' && <NewsFeedTab data={data} userId={activeUserId} />}
-            {tab === 'aging' && <AgingCurvesTab data={data} derived={derived} />}
-            {tab === 'roster' && <RosterHealthTab data={data} userId={activeUserId} />}
+            {tab === 'waivers' && <WaiversTab data={data} userId={activeUserId} />}
+            {tab === 'league' && <LeagueSettingsTab data={data} userId={activeUserId} tradeValueMap={derived.tradeValueMap} />}
           </>
         )}
       </main>

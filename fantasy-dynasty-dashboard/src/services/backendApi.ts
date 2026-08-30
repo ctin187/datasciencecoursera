@@ -107,6 +107,52 @@ export interface RosterHealthRequest {
   player_meta: Record<string, { name: string | null; position: string | null }>;
 }
 
+export interface UsageTrend {
+  games_in_window: number;
+  games_in_prior: number;
+  recent: Record<string, number>;
+  prior: Record<string, number>;
+  delta_pct: Record<string, number | null>;
+  /** null when there's no prior window to compare against - no trend is claimed. */
+  direction: 'rising' | 'falling' | 'stable' | null;
+  direction_basis: string;
+}
+
+export interface WaiverTarget extends VorPlayer {
+  usage: UsageTrend | null;
+  upgrade_over_weakest_starter: number | null;
+  weakest_starter_vor_at_position: number | null;
+}
+
+export interface BenchPlayer extends VorPlayer {
+  below_replacement: boolean;
+}
+
+export interface WaiverTargetsResponse {
+  provenance: Provenance;
+  season: number;
+  as_of_week: number;
+  games_remaining: number;
+  scoring_analysis: ScoringAnalysis;
+  replacement_levels: Record<string, ReplacementLevel>;
+  methodology: string;
+  count: number;
+  targets: WaiverTarget[];
+  bench_ranked: BenchPlayer[];
+}
+
+export interface WaiverTargetsRequest {
+  season?: number | null;
+  week?: number | null;
+  num_teams: number;
+  roster_positions: string[];
+  scoring_settings: Record<string, number>;
+  rostered_sleeper_ids: string[];
+  my_bench_sleeper_ids: string[];
+  my_starter_sleeper_ids: string[];
+  limit?: number;
+}
+
 export class BackendError extends Error {
   status?: number;
   constructor(message: string, status?: number) {
@@ -148,6 +194,10 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 export async function fetchRosterHealth(req: RosterHealthRequest): Promise<RosterHealthResponse> {
   return post<RosterHealthResponse>('/roster-health', req);
+}
+
+export async function fetchWaiverTargets(req: WaiverTargetsRequest): Promise<WaiverTargetsResponse> {
+  return post<WaiverTargetsResponse>('/waiver-targets', req);
 }
 
 export async function fetchHealth(): Promise<{ status: string; provenance: Provenance }> {

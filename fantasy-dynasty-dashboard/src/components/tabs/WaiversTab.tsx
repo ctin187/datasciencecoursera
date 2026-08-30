@@ -1,353 +1,295 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LeagueData } from '../../hooks/useLeagueData';
-import type { useDerivedData } from '../../hooks/useDerivedData';
 import type { Position } from '../../types';
 import { Card, CardTitle, StatTile } from '../ui/Card';
-import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
-import {
-  benchPlayerIds,
-  estimateSnapTrend,
-  faabSpentByRoster,
-  priorityScore,
-  rosteredPlayerIds,
-  suggestDropCandidates,
-  suggestFaabBid,
-} from '../../lib/waiverOptimizer';
-import { computeStrengthsWeaknesses, type Severity } from '../../lib/rosterHealthHub';
-import { resolvePlayerValue } from '../../lib/playerValue';
+import { benchPlayerIds, faabSpentByRoster, rosteredPlayerIds } from '../../lib/waiverOptimizer';
 import { detectLeagueFormat } from '../../lib/leagueFormat';
-import type { DropCandidate } from '../../types';
+import {
+  fetchWaiverTargets,
+  isBackendConfigured,
+  API_BASE_URL,
+  BackendError,
+  type WaiverTargetsResponse,
+  type WaiverTarget,
+} from '../../services/backendApi';
 
-type Derived = NonNullable<ReturnType<typeof useDerivedData>>;
-
-const SCORABLE_POSITIONS: Position[] = ['QB', 'RB', 'WR', 'TE'];
-
-const SEVERITY_COLOR: Record<Severity, 'green' | 'yellow' | 'orange' | 'red'> = {
-  STRENGTH: 'green',
-  LOW: 'yellow',
-  MEDIUM: 'orange',
-  CRITICAL: 'red',
-};
+/**
+ * Waiver wire, on measured data.
+ *
+ * This tab previously ranked free agents partly on a "snap/target trend" that
+ * was generated from a hash of the player's ID - deterministic noise wearing a
+ * disclaimer. That is gone. Ranking is now Value Over Replacement computed
+ * against this league's own settings, and every usage claim ("role is growing")
+ * comes from actual game logs via the backend.
+ */
 
 const FAAB_TIPS = [
-  "Keep 20-25% of your budget in reserve past midseason for injury-driven pickups — that's when the best real difference-makers hit waivers.",
-  'A RISING usage trend is worth paying up for before it shows up in box scores everyone sees; a FALLING trend on a rostered player is a sell/drop signal even if the name is still recognizable.',
-  "Don't spend big FAAB on a bye-week or injury-replacement rental — reserve premium bids for players who solve a CRITICAL need long-term.",
-  'In a shallow league, prioritize the best player available over need; in a deep league, need should usually win close calls since replacement-level talent is scarcer.',
+  'Hold 20-25% of your budget past midseason. The best real difference-makers hit waivers after injuries, not in week 3.',
+  'A rising target share is worth paying up for before it shows in box scores. A falling one is a sell signal even on a name you know.',
+  "Don't spend premium FAAB on a bye-week rental. Save it for players who solve a need for the rest of the season.",
+  'In a shallow league take the best player available; in a deep league need usually wins close calls, since replacement-level talent is scarcer.',
 ];
 
-interface WaiverRow {
-  playerId: string;
-  name: string;
-  position: Position;
-  team: string | null;
-  age: number | null;
-  consensusValue: number;
-  currentProjection: number;
-  tier: string;
-  snapTrendLabel: string;
-  targetTrendLabel: string;
-  trend: string;
-  opportunityScore: number;
-  rankScore: number;
-  suggestedBid: number;
-  priority: string;
-  reason: string;
-  dropCandidates: DropCandidate[];
+function fmtSigned(n: number | null | undefined, d = 1): string {
+  if (n === null || n === undefined) return '—';
+  return `${n > 0 ? '+' : ''}${n.toFixed(d)}`;
 }
 
-export function WaiversTab({ data, derived, userId }: { data: LeagueData; derived: Derived; userId: string }) {
-  const format = useMemo(() => detectLeagueFormat(data.league.roster_positions), [data.league.roster_positions]);
-  const [posFilter, setPosFilter] = useState<Position | 'ALL'>('ALL');
-  const [showFullBoard, setShowFullBoard] = useState(false);
-  const startingBudget = data.league.settings.waiver_budget ?? 100;
+function vorColor(v: number | null | undefined): string {
+  if (v === null || v === undefined) return 'text-slate-500';
+  if (v > 3) return 'text-emerald-400';
+  if (v > 0) return 'text-emerald-500/80';
+  if (v > -3) return 'text-amber-400';
+  return 'text-red-400';
+}
 
+const DIRECTION_COLOR: Record<string, 'green' | 'red' | 'gray'> = {
+  rising: 'green',
+  falling: 'red',
+  stable: 'gray',
+};
+
+export function WaiversTab({ data, userId }: { data: LeagueData; userId: string }) {
+  const [resp, setResp] = useState<WaiverTargetsResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [posFilter, setPosFilter] = useState<Position | 'ALL'>('ALL');
+
+  const format = useMemo(() => detectLeagueFormat(data.league.roster_positions), [data.league.roster_positions]);
   const rostered = useMemo(() => rosteredPlayerIds(data.rosters), [data.rosters]);
   const spentByRoster = useMemo(() => faabSpentByRoster(data.rosters), [data.rosters]);
+  const startingBudget = data.league.settings.waiver_budget ?? 100;
 
   const myRoster = userId ? data.rosters.find((r) => r.owner_id === userId) : undefined;
   const myBench = useMemo(() => (myRoster ? benchPlayerIds(myRoster) : []), [myRoster]);
+  const myStarters = useMemo(
+    () => (myRoster?.starters ?? []).filter((id) => id && id !== '0'),
+    [myRoster],
+  );
 
-  const benchCountByPosition = useMemo(() => {
-    const counts: Partial<Record<Position, number>> = {};
-    for (const id of myBench) {
-      const pos = data.players[id]?.position as Position | undefined;
-      if (!pos) continue;
-      counts[pos] = (counts[pos] ?? 0) + 1;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetchWaiverTargets({
+        num_teams: data.rosters.length,
+        roster_positions: data.league.roster_positions,
+        scoring_settings: (data.league.scoring_settings ?? {}) as Record<string, number>,
+        rostered_sleeper_ids: Array.from(rostered),
+        my_bench_sleeper_ids: myBench,
+        my_starter_sleeper_ids: myStarters,
+        limit: 80,
+      });
+      setResp(r);
+      console.debug('[WaiversTab] loaded', { count: r.count, as_of_week: r.as_of_week });
+    } catch (err) {
+      setResp(null);
+      setError(err instanceof BackendError ? err.message : String(err));
+    } finally {
+      setLoading(false);
     }
-    return counts;
-  }, [myBench, data.players]);
+  }, [data.rosters, data.league.roster_positions, data.league.scoring_settings, rostered, myBench, myStarters]);
 
-  const freeAgents = useMemo(() => {
-    return Object.values(data.players).filter((p) => {
-      if (rostered.has(p.player_id)) return false;
-      if (!format.activePositions.includes(p.position as Position)) return false;
-      if (p.status !== 'Active') return false;
-      return !!p.team;
-    });
-  }, [data.players, rostered, format.activePositions]);
+  useEffect(() => {
+    if (isBackendConfigured()) load();
+  }, [load]);
 
-  const rows: WaiverRow[] = useMemo(() => {
-    return freeAgents
-      .map((p) => {
-        const trend = estimateSnapTrend(p);
-        const resolved = resolvePlayerValue(p.player_id, data.players, derived.tradeValueMap);
-        const suggestion = suggestFaabBid(p, trend, resolved, { startingBudget, spentByRoster });
-        const dropCandidates = myRoster
-          ? suggestDropCandidates(
-              myBench,
-              data.players,
-              derived.tradeValueMap,
-              p.position as Position,
-              data.league.roster_positions,
-              resolved.consensusValue,
-              1,
-            )
-          : [];
-        return {
-          playerId: p.player_id,
-          name: p.full_name || `${p.first_name} ${p.last_name}`,
-          position: p.position as Position,
-          team: p.team,
-          age: p.age,
-          consensusValue: resolved.consensusValue,
-          currentProjection: Math.round(derived.threeDValues.get(p.player_id)?.currentProjection ?? 0),
-          tier: resolved.tier,
-          snapTrendLabel: `${(trend.earlySnapShare * 100).toFixed(0)}% → ${(trend.recentSnapShare * 100).toFixed(0)}%`,
-          targetTrendLabel: `${(trend.earlyTargetShare * 100).toFixed(0)}% → ${(trend.recentTargetShare * 100).toFixed(0)}%`,
-          trend: trend.trend,
-          opportunityScore: trend.opportunityScore,
-          rankScore: priorityScore(trend, resolved.consensusValue),
-          suggestedBid: suggestion.suggestedBid,
-          priority: suggestion.priority,
-          reason: suggestion.reason,
-          dropCandidates,
-        };
-      })
-      .sort((a, b) => b.rankScore - a.rankScore)
-      .slice(0, 150);
-  }, [freeAgents, derived.tradeValueMap, derived.threeDValues, startingBudget, spentByRoster, myRoster, myBench, data.players, data.league.roster_positions]);
+  const myFaabRemaining = myRoster ? startingBudget - (spentByRoster.get(myRoster.roster_id) ?? 0) : null;
 
-  const scorablePositions = SCORABLE_POSITIONS.filter((p) => format.activePositions.includes(p));
-  const needs = useMemo(() => {
-    if (!myRoster) return [];
-    return computeStrengthsWeaknesses(myRoster, data.players, derived.tradeValueMap, derived.threeDValues, rostered, scorablePositions)
-      .filter((n) => n.severity !== 'STRENGTH')
-      .sort((a, b) => a.gap - b.gap);
-  }, [myRoster, data.players, derived.tradeValueMap, derived.threeDValues, rostered, scorablePositions]);
+  const filtered: WaiverTarget[] = useMemo(() => {
+    if (!resp) return [];
+    return posFilter === 'ALL' ? resp.targets : resp.targets.filter((t) => t.position === posFilter);
+  }, [resp, posFilter]);
 
-  const rowsByPosition = useMemo(() => {
-    const map = new Map<Position, WaiverRow[]>();
-    for (const r of rows) {
-      const list = map.get(r.position) ?? [];
-      list.push(r);
-      map.set(r.position, list);
-    }
-    return map;
-  }, [rows]);
+  const droppable = resp?.bench_ranked.filter((b) => b.below_replacement) ?? [];
 
-  const filteredRows = posFilter === 'ALL' ? rows : rows.filter((r) => r.position === posFilter);
-
-  const columns: Column<WaiverRow>[] = [
-    { key: 'name', header: 'Player', accessor: (r) => r.name },
-    { key: 'position', header: 'Pos', accessor: (r) => r.position, align: 'center' },
-    { key: 'team', header: 'Team', accessor: (r) => r.team ?? '—', align: 'center' },
-    {
-      key: 'consensusValue',
-      header: 'Value',
-      accessor: (r) => r.consensusValue,
-      align: 'right',
-      render: (r) => (
-        <span title={r.tier}>{r.consensusValue > 0 ? r.consensusValue : <span className="text-slate-600">none</span>}</span>
-      ),
-    },
-    { key: 'snapTrendLabel', header: 'Sim. Snap Trend', accessor: (r) => r.snapTrendLabel, sortable: false },
-    { key: 'targetTrendLabel', header: 'Sim. Target Trend', accessor: (r) => r.targetTrendLabel, sortable: false },
-    {
-      key: 'trend',
-      header: 'Trend',
-      accessor: (r) => r.trend,
-      align: 'center',
-      render: (r) => <Badge color={r.trend === 'RISING' ? 'green' : r.trend === 'FALLING' ? 'red' : 'gray'}>{r.trend}</Badge>,
-    },
-    { key: 'rankScore', header: 'Rank Score', accessor: (r) => Math.round(r.rankScore), align: 'right' },
-    { key: 'suggestedBid', header: 'Suggested FAAB', accessor: (r) => r.suggestedBid, align: 'right', render: (r) => `$${r.suggestedBid}` },
-    {
-      key: 'priority',
-      header: 'Priority',
-      accessor: (r) => r.priority,
-      align: 'center',
-      render: (r) => (
-        <Badge color={r.priority === 'HIGH PRIORITY' ? 'green' : r.priority === 'MEDIUM' ? 'yellow' : r.priority === 'LOW' ? 'blue' : 'gray'}>
-          {r.priority}
-        </Badge>
-      ),
-    },
-    {
-      key: 'dropCandidate',
-      header: 'Suggested Drop',
-      accessor: (r) => r.dropCandidates[0]?.name ?? '',
-      sortable: false,
-      render: (r) => {
-        if (!userId) return <span className="text-slate-600">select your team</span>;
-        const top = r.dropCandidates[0];
-        if (!top) return <span className="text-slate-600">no matching bench spot</span>;
-        return (
-          <span title={top.reason} className="cursor-help text-amber-300">
-            {top.name} <span className="text-slate-500">({top.position})</span>
-          </span>
-        );
-      },
-    },
-  ];
-
-  const totalBudgetRemaining = Array.from(spentByRoster.values()).reduce((s, spent) => s + (startingBudget - spent), 0);
-  const avgRemaining = data.rosters.length ? Math.round(totalBudgetRemaining / data.rosters.length) : 0;
-
-  console.debug('[WaiversTab] render', { needCount: needs.length, freeAgentCount: rows.length, hasMyRoster: !!myRoster });
+  if (!isBackendConfigured()) {
+    return (
+      <Card>
+        <CardTitle subtitle="Waiver rankings come from the Python backend, which isn't wired up in this build.">
+          Waiver Wire — backend not configured
+        </CardTitle>
+        <p className="text-sm text-slate-300">
+          Set <code className="rounded bg-slate-800 px-1.5 py-0.5">VITE_API_BASE_URL</code> to a deployed instance of{' '}
+          <code className="rounded bg-slate-800 px-1.5 py-0.5">/fantasy-backend</code> and rebuild.
+        </p>
+        <p className="mt-3 text-xs text-slate-500">
+          Showing nothing rather than falling back to the old ranking — that one was driven partly by a simulated usage
+          signal, and a fabricated number is worse than an empty screen.
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="rounded-md border border-amber-700/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
-        <span className="font-semibold">Snap/target share trends here are simulated, not real.</span> Sleeper's free
-        API doesn't expose live usage stats, so the "Sim. Snap/Target Trend" and "Trend" columns are a stand-in
-        signal, not actual game data — don't treat a "RISING" badge as real preseason or in-season performance.
-        The <b>Value</b> and <b>Rank Score</b> columns (dynasty consensus + estimate) carry the majority weight in
-        ranking and priority specifically so a fabricated trend number can never rank a total unknown above a
-        real, valuable player — but always sanity-check any pickup against actual news before adding.
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-semibold text-slate-300">Data provenance</span>
+          {resp ? (
+            <>
+              <span className="font-mono text-slate-400">{resp.season} · through week {resp.as_of_week}</span>
+              <span className="font-mono text-slate-400">
+                pulled {resp.provenance.data_as_of ? new Date(resp.provenance.data_as_of).toLocaleString() : 'unknown'}
+              </span>
+              <span className="text-slate-500">{resp.provenance.source}</span>
+              {resp.provenance.stale && <Badge color="orange">STALE ({resp.provenance.age_hours}h)</Badge>}
+            </>
+          ) : (
+            <span className="text-slate-500">{loading ? 'loading…' : 'no data'}</span>
+          )}
+        </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="min-h-[32px] rounded-md bg-slate-800 px-2.5 py-1 font-medium text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
 
-      <Card>
-        <CardTitle subtitle="FAAB budget across the league.">FAAB Budget Snapshot</CardTitle>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Starting Budget" value={`$${startingBudget}`} />
-          <StatTile label="Avg Remaining" value={`$${avgRemaining}`} />
-          <StatTile label="Teams" value={data.rosters.length} />
-          <StatTile label="Free Agents Ranked" value={rows.length} />
-        </div>
-      </Card>
-
-      {!myRoster && (
+      {error && (
         <Card>
-          <CardTitle subtitle="Pick your team from the dropdown in the header above to see the board organized around your actual roster needs, with personalized drop suggestions.">
-            Select Your Team for Personalized Needs
-          </CardTitle>
+          <CardTitle>Couldn't reach the backend</CardTitle>
+          <p className="text-sm text-red-300">{error}</p>
+          <p className="mt-2 text-xs text-slate-500">Configured URL: <code>{API_BASE_URL || '(unset)'}</code></p>
         </Card>
       )}
 
-      {myRoster && (
-        <Card>
-          <CardTitle subtitle="Ranked by severity — CRITICAL ≥50pt gap vs. best available, MEDIUM 20-50, LOW <20. Each need shows your top ranked targets at that position.">
-            Your Roster Needs
-          </CardTitle>
-          {needs.length === 0 && <p className="text-sm text-slate-500">No positional weaknesses detected — nothing urgent on waivers right now.</p>}
-          <div className="space-y-4">
-            {needs.map((need) => {
-              const targets = (rowsByPosition.get(need.position) ?? []).slice(0, 5);
-              return (
-                <div key={need.position} className="rounded-lg border border-slate-800 p-3">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <Badge color={SEVERITY_COLOR[need.severity]}>{need.severity}</Badge>
-                    <span className="font-semibold text-slate-200">{need.position}</span>
-                    <span className="text-xs text-slate-500">
-                      {need.yourPlayerName ?? 'no starter rostered'} projects {need.yourProjection} pts vs. best available {need.replacementProjection} pts
-                      ({need.gap} pt gap)
-                    </span>
-                  </div>
-                  {targets.length === 0 && <p className="text-sm text-slate-500">No free agents found at this position.</p>}
-                  <div className="space-y-1.5">
-                    {targets.map((t) => {
-                      const drop = t.dropCandidates[0];
-                      const dropBenchCount = drop ? benchCountByPosition[drop.position] ?? 0 : 0;
-                      const confidence = Math.max(
-                        0,
-                        Math.min(100, 55 + (t.consensusValue > 0 ? 25 : 0) + (t.trend === 'RISING' ? 10 : t.trend === 'FALLING' ? -15 : 0)),
-                      );
-                      return (
-                        <div key={t.playerId} className="rounded-md bg-slate-950/40 p-2.5 text-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium text-slate-100">
-                              {t.name} <span className="text-slate-500">({t.team ?? 'FA'})</span>
-                            </span>
-                            <span className="flex items-center gap-2">
-                              <Badge color={t.priority === 'HIGH PRIORITY' ? 'green' : t.priority === 'MEDIUM' ? 'yellow' : 'gray'}>{t.priority}</Badge>
-                              <Badge color={confidence >= 70 ? 'green' : confidence >= 50 ? 'yellow' : 'red'}>{confidence}% conf.</Badge>
-                            </span>
-                          </div>
-                          <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-slate-400 sm:grid-cols-4">
-                            <span>Proj: {t.currentProjection} pts vs. {need.yourProjection} pts now</span>
-                            <span>Cost: ${t.suggestedBid} FAAB</span>
-                            <span>
-                              Why available: {t.trend === 'RISING' ? 'usage trending up, not yet widely rostered' : t.trend === 'FALLING' ? 'usage trending down' : 'stable role, off the radar'}
-                            </span>
-                            <span>
-                              Drop: {drop ? `${drop.name} (${drop.position})` : 'no clear cut'}
-                            </span>
-                          </div>
-                          {drop && (
-                            <p className="mt-1 text-[11px] text-slate-500">
-                              Cascade: after this move you'd have {Math.max(0, dropBenchCount - 1)} bench player(s) left at {drop.position}
-                              {dropBenchCount - 1 <= 0 ? ' — you would be thin there.' : '.'}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
+      {resp && (
+        <>
+          <Card>
+            <CardTitle subtitle="Your league's FAAB position.">FAAB Budget</CardTitle>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatTile label="Your Remaining" value={myFaabRemaining !== null ? `$${myFaabRemaining}` : '—'} hint={`of $${startingBudget}`} />
+              <StatTile label="Starting Budget" value={`$${startingBudget}`} />
+              <StatTile label="Teams" value={data.rosters.length} />
+              <StatTile label="Free Agents Ranked" value={resp.count} />
+            </div>
+          </Card>
 
-      <Card>
-        <CardTitle subtitle="General waiver-budget strategy — principles, not player-specific data.">FAAB Strategy Tips</CardTitle>
-        <ul className="list-inside list-disc space-y-1.5 text-sm text-slate-300">
-          {FAAB_TIPS.map((tip, i) => (
-            <li key={i}>{tip}</li>
-          ))}
-        </ul>
-      </Card>
+          {!myRoster && (
+            <Card>
+              <CardTitle subtitle="Pick your team from the dropdown in the header to see which of these are upgrades over your current starters, and which of your bench players are actually droppable.">
+                Select Your Team for Personalized Context
+              </CardTitle>
+            </Card>
+          )}
 
-      <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <CardTitle
-            subtitle={
-              userId
-                ? "Full board, all free agents. \"Suggested Drop\" is the weakest matching bench player on your roster whose value doesn't clearly exceed this pickup's."
-                : 'Select your team above for personalized "who to drop" suggestions alongside each pickup.'
-            }
-          >
-            Browse All Free Agents
-          </CardTitle>
-          <button
-            onClick={() => setShowFullBoard((s) => !s)}
-            className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-slate-700"
-          >
-            {showFullBoard ? 'Hide' : 'Show'}
-          </button>
-        </div>
-        {showFullBoard && (
-          <>
+          <Card>
+            <CardTitle subtitle="Ranked by Value Over Replacement in your league's settings. Usage direction is measured from real game logs — a 4-game window against all earlier weeks.">
+              Top Available Players
+            </CardTitle>
             <div className="mb-3 flex flex-wrap gap-1.5">
               {(['ALL', ...format.activePositions] as (Position | 'ALL')[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPosFilter(p)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium ${
-                    posFilter === p ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  className={`min-h-[32px] rounded-md px-3 py-1 text-xs font-medium ${
+                    posFilter === p ? 'bg-violet-600 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
                   {p}
                 </button>
               ))}
             </div>
-            <DataTable rows={filteredRows} columns={columns} rowKey={(r) => r.playerId} defaultSortKey="rankScore" />
-          </>
-        )}
-      </Card>
+
+            <div className="space-y-1.5">
+              {filtered.slice(0, 40).map((t) => {
+                const u = t.usage;
+                return (
+                  <div key={t.sleeper_id ?? t.gsis_id ?? t.name} className="rounded-md border border-slate-800 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-slate-100">
+                        {t.name}
+                        <span className="ml-1.5 text-xs text-slate-500">
+                          {t.position}{t.team ? ` · ${t.team}` : ''}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {u?.direction && <Badge color={DIRECTION_COLOR[u.direction]}>{u.direction.toUpperCase()}</Badge>}
+                        <span className={`font-mono font-semibold ${vorColor(t.vor_per_game)}`}>
+                          {fmtSigned(t.vor_per_game)} VOR/g
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="mt-1.5 grid grid-cols-1 gap-1 text-xs text-slate-400 sm:grid-cols-3">
+                      <span className="font-mono">
+                        proj {t.projected_points_per_game?.toFixed(1)} vs repl {t.replacement_points?.toFixed(1)}
+                      </span>
+                      {u ? (
+                        <span className="font-mono">
+                          {u.recent.targets > 0 && `${u.recent.targets.toFixed(1)} tgt/g `}
+                          {u.recent.carries > 0 && `${u.recent.carries.toFixed(1)} car/g `}
+                          {u.recent.snap_share > 0 && `· ${(u.recent.snap_share * 100).toFixed(0)}% snaps`}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600">no usage data</span>
+                      )}
+                      {t.upgrade_over_weakest_starter !== null && (
+                        <span className={t.upgrade_over_weakest_starter > 0 ? 'text-emerald-400' : 'text-slate-500'}>
+                          {t.upgrade_over_weakest_starter > 0
+                            ? `${fmtSigned(t.upgrade_over_weakest_starter)} over your weakest ${t.position}`
+                            : `not an upgrade on your ${t.position}s`}
+                        </span>
+                      )}
+                    </div>
+
+                    {u && (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        {u.direction ? `Why: ${u.direction_basis}` : u.direction_basis}
+                        {u.games_in_prior > 0 && ` · ${u.games_in_window}g recent vs ${u.games_in_prior}g prior`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+              {filtered.length === 0 && <p className="text-sm text-slate-500">No available players at this position.</p>}
+            </div>
+          </Card>
+
+          {myRoster && (
+            <Card>
+              <CardTitle subtitle="Bench players projecting below replacement level — a freely-available player at their position projects better. These are your genuine drop candidates.">
+                Droppable ({droppable.length})
+              </CardTitle>
+              {droppable.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  Nothing on your bench is below replacement. Every bench spot is holding real surplus value.
+                </p>
+              )}
+              <div className="space-y-1.5">
+                {droppable.map((b) => (
+                  <div key={b.sleeper_id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 px-3 py-2 text-sm">
+                    <span className="text-slate-200">
+                      {b.name}
+                      <span className="ml-1.5 text-xs text-slate-500">{b.position}{b.team ? ` · ${b.team}` : ''}</span>
+                    </span>
+                    <span className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-slate-500">
+                        proj {b.projected_points_per_game?.toFixed(1)} vs repl {b.replacement_points?.toFixed(1)}
+                      </span>
+                      <span className={`font-mono font-semibold ${vorColor(b.vor_per_game)}`}>{fmtSigned(b.vor_per_game)}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          <Card>
+            <CardTitle subtitle="General budget strategy — principles, not player-specific claims.">FAAB Strategy</CardTitle>
+            <ul className="list-inside list-disc space-y-1.5 text-sm text-slate-300">
+              {FAAB_TIPS.map((tip, i) => (
+                <li key={i}>{tip}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-slate-600">{resp.methodology}</p>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

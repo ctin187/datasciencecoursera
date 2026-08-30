@@ -19,7 +19,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import config, ids, projections, scoring, store, vor
+from . import config, ids, projections, scoring, store, usage, vor
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("api")
@@ -405,6 +405,117 @@ class RosterHealthRequest(BaseModel):
     focus_roster_id: int | None = None
     fumble_scope: str = "all"
     player_meta: dict[str, dict] = Field(default_factory=dict)  # sleeper_id -> {name, position}
+
+
+class WaiverTargetsRequest(BaseModel):
+    season: int | None = None
+    week: int | None = None
+    num_teams: int
+    roster_positions: list[str]
+    scoring_settings: dict = Field(default_factory=dict)
+    rostered_sleeper_ids: list[str] = Field(default_factory=list)
+    my_bench_sleeper_ids: list[str] = Field(default_factory=list)
+    my_starter_sleeper_ids: list[str] = Field(default_factory=list)
+    fumble_scope: str = "all"
+    limit: int = 60
+
+
+@app.post("/waiver-targets")
+def waiver_targets(req: WaiverTargetsRequest) -> dict:
+    """Free agents ranked by VOR, with REAL opportunity trends.
+
+    Every number here is measured: VOR against this league's own replacement
+    level, and usage direction from actual game logs. Nothing is simulated.
+    Players the projection model has never seen are returned in a separate
+    `unprojected` bucket rather than being ranked against real ones on a
+    fabricated score.
+    """
+    season = req.season or config.DEFAULT_SEASON
+    settings = req.scoring_settings or scoring.DEFAULT_PPR
+    projs, as_of, max_week = _projection_inputs(season, req.week, settings, req.fumble_scope)
+    levels = vor.compute_replacement_levels(projs, req.roster_positions, req.num_teams)
+    games_left = max(0, config.REG_SEASON_WEEKS - as_of)
+    vor_by_gsis = vor.compute_vor(projs, levels, games_left)
+
+    stats = _require("player_stats")
+    trends = usage.compute_usage_trends(
+        stats, season, as_of,
+        snap_share_by_key=_snap_share_lookup(season, None),
+        gsis_to_pfr=_gsis_to_pfr(),
+    )
+
+    rostered_gsis = {
+        g for g in (ids.sleeper_to_gsis(s) for s in req.rostered_sleeper_ids) if g
+    }
+
+    # What the current starting lineup is worth at each position, so a target
+    # can be described as an upgrade over something specific rather than in
+    # the abstract.
+    starter_vor_by_pos: dict[str, float] = {}
+    for sid in req.my_starter_sleeper_ids:
+        g = ids.sleeper_to_gsis(sid)
+        v = vor_by_gsis.get(g) if g else None
+        if v and v.position:
+            cur = starter_vor_by_pos.get(v.position)
+            if cur is None or v.vor_per_game < cur:
+                starter_vor_by_pos[v.position] = v.vor_per_game
+
+    bench_gsis = {
+        g for g in (ids.sleeper_to_gsis(s) for s in req.my_bench_sleeper_ids) if g
+    }
+
+    available = []
+    for gsis, v in vor_by_gsis.items():
+        if gsis in rostered_gsis:
+            continue
+        t = trends.get(gsis)
+        weakest = starter_vor_by_pos.get(v.position or "")
+        available.append({
+            **v.to_dict(),
+            "sleeper_id": ids.gsis_to_sleeper(gsis),
+            "usage": t.to_dict() if t else None,
+            "upgrade_over_weakest_starter": (
+                round(v.vor_per_game - weakest, 2) if weakest is not None else None
+            ),
+            "weakest_starter_vor_at_position": weakest,
+        })
+
+    available.sort(key=lambda p: p["vor_per_game"], reverse=True)
+
+    # Your bench, worst first. Only players actually BELOW replacement are
+    # flagged droppable - a positive-VOR bench player is surplus value, and
+    # labelling him "droppable" just because he is your weakest bench spot
+    # would be wrong.
+    bench_ranked = sorted(
+        (
+            {
+                **vor_by_gsis[g].to_dict(),
+                "sleeper_id": ids.gsis_to_sleeper(g),
+                "below_replacement": vor_by_gsis[g].vor_per_game < 0,
+            }
+            for g in bench_gsis
+            if g in vor_by_gsis
+        ),
+        key=lambda p: p["vor_per_game"],
+    )
+
+    return {
+        "provenance": store.provenance(),
+        "season": season,
+        "as_of_week": as_of,
+        "latest_cached_week": max_week,
+        "games_remaining": games_left,
+        "scoring_analysis": scoring.analyze_settings(settings),
+        "replacement_levels": {k: vars(v) for k, v in levels.items()},
+        "methodology": (
+            "Free agents ranked by Value Over Replacement using this league's own "
+            "roster settings. Usage direction is measured from actual game logs "
+            "(recent 4-game window vs. all earlier weeks), not simulated."
+        ),
+        "count": len(available),
+        "targets": available[: req.limit],
+        "bench_ranked": bench_ranked,
+    }
 
 
 @app.post("/roster-health")
