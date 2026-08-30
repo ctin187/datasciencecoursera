@@ -1,42 +1,53 @@
 @import "tailwindcss";
 
 /*
- * "NFL Front Office" theme: overrides Tailwind's default slate/violet color
- * scales rather than rewriting className strings across every component -
- * every existing bg-slate-900, text-slate-400, bg-violet-600, etc. utility
- * everywhere in the app now resolves to this palette automatically.
+ * "GRIDIRON TERMINAL" theme: an 80s/90s arcade football cabinet wired into a
+ * modern quant terminal. Same trick as before - override Tailwind's
+ * slate/violet color scales via @theme rather than rewriting className
+ * strings across every component, so every existing bg-slate-900,
+ * text-violet-400, etc. utility everywhere in the app resolves to this
+ * palette automatically.
  *
- * slate  -> dark navy/charcoal base (spec: navy #0a0e27, charcoal #1a2332, silver #e8e8e8)
- * violet -> gold accent (spec: #c8b896), split across a deeper bronze-gold
- *           for solid button fills (better contrast with white text) and
- *           the lighter spec gold for borders/highlights/hover states.
+ * slate  -> near-black charcoal terminal base (was navy)
+ * violet -> electric arcade amber, the "brand"/primary accent (was bronze-gold)
+ *
+ * Semantic status colors (emerald=positive, rose=negative, amber=warning,
+ * sky=info) are deliberately left as Tailwind's defaults - they already read
+ * as clean "indicator light" colors on a dark background, and overriding them
+ * too would fight the one signal (amber) that's supposed to mean "brand",
+ * not "warning". Restraint here is what keeps the retro treatment from
+ * turning into visual noise.
  */
 @theme {
   --color-slate-50: #ffffff;
-  --color-slate-100: #f3f4f6;
-  --color-slate-200: #e8e8e8;
-  --color-slate-300: #c7ccdc;
-  --color-slate-400: #a3aac2;
-  --color-slate-500: #8087a0;
-  --color-slate-600: #4b5670;
-  --color-slate-700: #2a3548;
-  --color-slate-800: #1a2332;
-  --color-slate-900: #131a30;
-  --color-slate-950: #0a0e27;
+  --color-slate-100: #eef1f4;
+  --color-slate-200: #dbe0e6;
+  --color-slate-300: #b8c0ca;
+  --color-slate-400: #8a94a1;
+  --color-slate-500: #626d7a;
+  --color-slate-600: #414954;
+  --color-slate-700: #262c35;
+  --color-slate-800: #171b21;
+  --color-slate-900: #0e1116;
+  --color-slate-950: #08090c;
 
-  --color-violet-100: #f7f4ec;
-  --color-violet-200: #f0ebdd;
-  --color-violet-300: #e6ddc8;
-  --color-violet-400: #d9cdb0;
-  --color-violet-500: #c8b896;
-  --color-violet-600: #a3853f;
-  --color-violet-700: #7a632a;
-  --color-violet-800: #5c4a20;
-  --color-violet-900: #3d3015;
-  --color-violet-950: #241d0a;
+  --color-violet-100: #fff3de;
+  --color-violet-200: #ffe6b3;
+  --color-violet-300: #ffd27a;
+  --color-violet-400: #ffbc47;
+  --color-violet-500: #ffa41f;
+  --color-violet-600: #e07f00;
+  --color-violet-700: #a85f00;
+  --color-violet-800: #6b3d00;
+  --color-violet-900: #442700;
+  --color-violet-950: #2a1800;
 
   --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+  /* Chunky true pixel/8-bit font - SHORT strings only: headings, labels, buttons, badges. */
+  --font-display: 'Press Start 2P', var(--font-mono);
+  /* CRT terminal monospace - readable at size, used for scoreboard-style numeric readouts. */
+  --font-scoreboard: 'VT323', var(--font-mono);
 }
 
 :root {
@@ -49,9 +60,15 @@ html, body, #root {
 
 body {
   margin: 0;
-  background: var(--color-slate-950);
   color: var(--color-slate-100);
   font-family: var(--font-sans);
+  background-color: var(--color-slate-950);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255, 164, 31, 0.07), transparent 60%),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: auto, 28px 28px, 28px 28px;
+  background-attachment: fixed;
 }
 
 ::-webkit-scrollbar {
@@ -68,4 +85,132 @@ body {
 
 table {
   border-collapse: collapse;
+}
+
+/* ---------------------------------------------------------------------- */
+/* CRT effects - toggleable (see hooks/useCrtEffects.ts), always subtle.   */
+/* ---------------------------------------------------------------------- */
+
+.crt-root {
+  position: relative;
+  isolation: isolate;
+}
+
+.crt-on::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0.11) 2px,
+    rgba(0, 0, 0, 0) 3px
+  );
+  mix-blend-mode: multiply;
+}
+
+.crt-on::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 59;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crt-on::after {
+    animation: crt-flicker 7s ease-in-out infinite;
+  }
+}
+
+@keyframes crt-flicker {
+  0%, 96%, 100% { opacity: 1; }
+  97% { opacity: 0.94; }
+  98% { opacity: 1; }
+  99% { opacity: 0.97; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Arcade panel: the console-bezel look shared by Card/DataTable/etc.     */
+/* ---------------------------------------------------------------------- */
+
+.arcade-panel {
+  position: relative;
+  border: 1px solid var(--color-slate-700);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+.arcade-panel-accent::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 14px;
+  right: 14px;
+  height: 2px;
+  background: var(--color-violet-500);
+  opacity: 0.7;
+}
+
+/* Small pixel "bolt" accents at the top corners of a panel - decorative,
+   evokes a bolted arcade-cabinet control panel without needing precise
+   pixel-notch clip-paths that are hard to get right without live rendering. */
+.pixel-bolts::before,
+.pixel-bolts::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  width: 4px;
+  height: 4px;
+  background: var(--color-slate-600);
+}
+.pixel-bolts::before { left: 6px; }
+.pixel-bolts::after { right: 6px; }
+
+/* ---------------------------------------------------------------------- */
+/* Meter fill glow - very small, only on the filled segment of Meter.tsx. */
+/* ---------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .meter-fill-live {
+    animation: meter-glow 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes meter-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
+}
+
+/* Blinking text cursor, used sparingly (simulation-running state, live badges). */
+@media (prefers-reduced-motion: no-preference) {
+  .terminal-cursor::after {
+    content: "\2588";
+    margin-left: 2px;
+    animation: cursor-blink 1s steps(1) infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .terminal-cursor::after {
+    content: "\2588";
+    margin-left: 2px;
+  }
+}
+@keyframes cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* New-content slide-in - used only for freshly-appeared signals/notifications. */
+@media (prefers-reduced-motion: no-preference) {
+  .signal-enter {
+    animation: signal-enter 320ms ease-out;
+  }
+}
+@keyframes signal-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
