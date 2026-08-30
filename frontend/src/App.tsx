@@ -14,6 +14,8 @@ import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 import { LeagueDnaTab } from './components/tabs/LeagueDnaTab';
 import { EdgeEngineTab } from './components/tabs/EdgeEngineTab';
+import { FranchiseHistoryTab } from './components/tabs/FranchiseHistoryTab';
+import { useLeagueHistory } from './hooks/useLeagueHistory';
 
 // Four tabs. This app targets both redraft and dynasty/keeper Sleeper
 // leagues - League Overview auto-detects which one you're in (and every
@@ -34,6 +36,7 @@ const TABS = [
   { id: 'waivers', label: 'Waiver Wire' },
   { id: 'season', label: 'Season Outlook' },
   { id: 'dna', label: 'League DNA' },
+  { id: 'history', label: 'Franchise History' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -52,6 +55,7 @@ export default function App() {
   const seasonTransactions = useSeasonTransactions(activeLeagueId, data?.league);
   const activeDraft = data ? (data.drafts.find((d) => d.league_id === data.league.league_id) ?? data.drafts[0]) : undefined;
   const draftPicks = useDraftPicks(activeDraft?.draft_id ?? null);
+  const leagueHistory = useLeagueHistory(activeLeagueId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,6 +196,7 @@ export default function App() {
             )}
             {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
             {tab === 'dna' && <LeagueDnaTab data={data} draftPicks={draftPicks} transactions={seasonTransactions} />}
+            {tab === 'history' && <FranchiseHistoryTab history={leagueHistory} userId={activeUserId} />}
           </>
         )}
       </main>
