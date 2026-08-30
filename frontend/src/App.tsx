@@ -13,6 +13,7 @@ import { SeasonOutlookTab } from './components/tabs/SeasonOutlookTab';
 import { TradeAnalyzerTab } from './components/tabs/TradeAnalyzerTab';
 import { DraftAssistantTab } from './components/tabs/DraftAssistantTab';
 import { LeagueDnaTab } from './components/tabs/LeagueDnaTab';
+import { EdgeEngineTab } from './components/tabs/EdgeEngineTab';
 
 // Four tabs. This app targets both redraft and dynasty/keeper Sleeper
 // leagues - League Overview auto-detects which one you're in (and every
@@ -26,6 +27,7 @@ import { LeagueDnaTab } from './components/tabs/LeagueDnaTab';
 // in the product spec are not built yet - see the README roadmap.
 const TABS = [
   { id: 'league', label: 'League Overview' },
+  { id: 'edge', label: 'Edge Engine' },
   { id: 'roster', label: 'Roster Value' },
   { id: 'draft', label: 'Draft Assistant' },
   { id: 'trade', label: 'Trade Analyzer' },
@@ -171,6 +173,17 @@ export default function App() {
               </div>
             )}
             {tab === 'league' && <LeagueOverviewTab data={data} userId={activeUserId} />}
+            {tab === 'edge' && (
+              <EdgeEngineTab
+                data={data}
+                userId={activeUserId}
+                rosterHealth={rosterHealth}
+                waiverTargets={waiverTargets}
+                seasonSim={seasonSim}
+                draftPicks={draftPicks}
+                pool={projectionPool}
+              />
+            )}
             {tab === 'roster' && <RosterValueTab data={data} userId={activeUserId} health={rosterHealth} />}
             {tab === 'draft' && <DraftAssistantTab data={data} userId={activeUserId} pool={projectionPool} draftPicks={draftPicks} />}
             {tab === 'trade' && <TradeAnalyzerTab data={data} health={rosterHealth} seasonSim={seasonSim} />}
