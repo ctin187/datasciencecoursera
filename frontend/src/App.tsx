@@ -4,6 +4,7 @@ import { useSeasonSimulation } from './hooks/useSeasonSimulation';
 import { useRosterHealth } from './hooks/useRosterHealth';
 import { useWaiverTargets } from './hooks/useWaiverTargets';
 import { useProjectionPool } from './hooks/useProjectionPool';
+import { useFaabHistory } from './hooks/useFaabHistory';
 import { LeagueOverviewTab } from './components/tabs/LeagueOverviewTab';
 import { RosterValueTab } from './components/tabs/RosterValueTab';
 import { WaiverWireTab } from './components/tabs/WaiverWireTab';
@@ -43,6 +44,7 @@ export default function App() {
   const rosterHealth = useRosterHealth(data, activeUserId);
   const waiverTargets = useWaiverTargets(data, activeUserId);
   const projectionPool = useProjectionPool(data?.league);
+  const faabHistory = useFaabHistory(activeLeagueId, data?.league);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +169,9 @@ export default function App() {
             {tab === 'roster' && <RosterValueTab data={data} userId={activeUserId} health={rosterHealth} />}
             {tab === 'draft' && <DraftAssistantTab data={data} userId={activeUserId} pool={projectionPool} />}
             {tab === 'trade' && <TradeAnalyzerTab data={data} health={rosterHealth} seasonSim={seasonSim} />}
-            {tab === 'waivers' && <WaiverWireTab waivers={waiverTargets} />}
+            {tab === 'waivers' && (
+              <WaiverWireTab data={data} userId={activeUserId} waivers={waiverTargets} pool={projectionPool} faab={faabHistory} />
+            )}
             {tab === 'season' && <SeasonOutlookTab data={data} userId={activeUserId} sim={seasonSim} />}
           </>
         )}
