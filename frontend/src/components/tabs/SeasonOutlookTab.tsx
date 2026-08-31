@@ -4,7 +4,6 @@ import type { TeamSimResult } from '../../lib/seasonSimulator';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
-import { Mascot } from '../ui/Mascot';
 import { ChampionshipMeter } from '../ui/ChampionshipMeter';
 
 function pct(x: number): string {
@@ -17,7 +16,7 @@ export function SeasonOutlookTab({ data, userId, sim }: { data: LeagueData; user
   if (sim.loading) {
     return (
       <Card>
-        <p className="terminal-cursor text-center font-scoreboard text-lg text-violet-400">SIMULATING SEASONS</p>
+        <p className="text-center num text-sm font-semibold tracking-wide text-violet-400 uppercase">SIMULATING SEASONS</p>
         <p className="mt-2 text-center text-xs text-slate-500">Fetching this season's matchup history and running the Monte Carlo simulation…</p>
       </Card>
     );
@@ -39,13 +38,10 @@ export function SeasonOutlookTab({ data, userId, sim }: { data: LeagueData; user
     return (
       <Card>
         <CardTitle>Season Outlook</CardTitle>
-        <div className="flex items-start gap-3">
-          <Mascot state="benched" size={48} className="shrink-0" />
-          <p className="text-slate-400">
-            No completed weeks with real scores yet, so there's no scoring history to simulate from. Check back once Week 1
-            has been played — the model refuses to invent a projection-based simulation in the meantime.
-          </p>
-        </div>
+        <p className="text-muted">
+          No completed weeks with real scores yet, so there's no scoring history to simulate from. Check back once Week 1
+          has been played — the model refuses to invent a projection-based simulation in the meantime.
+        </p>
       </Card>
     );
   }
@@ -118,9 +114,9 @@ export function SeasonOutlookTab({ data, userId, sim }: { data: LeagueData; user
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {result.status === 'season-complete' && (
-        <div className="rounded-md border border-emerald-700/50 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+        <div className="border border-emerald-700/50 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
           Season and playoffs are complete — these are the actual final results, not a simulation.
         </div>
       )}

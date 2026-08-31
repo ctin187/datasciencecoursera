@@ -6,19 +6,10 @@ import type { SeasonSimulationState } from '../../hooks/useSeasonSimulation';
 import type { DraftPicksState } from '../../hooks/useDraftPicks';
 import type { ProjectionPoolState } from '../../hooks/useProjectionPool';
 import { computeEdgeSignals, type EdgeSignal } from '../../lib/edgeEngine';
-import { buildActionCenter, type ActionItem } from '../../lib/actionCenter';
+import { buildActionCenter } from '../../lib/actionCenter';
 import { Card, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { Mascot, type MascotState } from '../ui/Mascot';
 import { ChampionshipMeter } from '../ui/ChampionshipMeter';
-
-const CATEGORY_TO_MASCOT: Record<ActionItem['category'], MascotState> = {
-  LINEUP: 'danger',
-  ROSTER: 'danger',
-  WAIVER: 'waiver',
-  PLAYOFFS: 'confident',
-  DRAFT: 'draft',
-};
 
 const STATUS_STYLE: Record<EdgeSignal['status'], string> = {
   edge: 'border-emerald-700/60 bg-emerald-950/20',
@@ -86,13 +77,12 @@ export function EdgeEngineTab({
     );
   }
 
-  const mascotState: MascotState = actionItems[0] ? CATEGORY_TO_MASCOT[actionItems[0].category] : 'idle';
   const myTeamSim = myRosterId != null && seasonSim.result?.status === 'ready'
     ? seasonSim.result.teams.find((t) => t.rosterId === myRosterId)
     : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {myTeamSim && (
         <ChampionshipMeter probabilityPct={myTeamSim.championshipProbability * 100} simulations={seasonSim.result!.simulations} />
       )}
@@ -102,9 +92,8 @@ export function EdgeEngineTab({
           <CardTitle subtitle="Rules-based synthesis of the numbers this app already computed elsewhere - not a language model call, so it cannot invent a figure that isn't already backed by real data.">
             Action Center
           </CardTitle>
-          <div className="flex gap-4">
-            <Mascot state={mascotState} size={56} className="mt-1 hidden shrink-0 sm:block" />
-            <ol className="flex-1 space-y-2">
+          <div className="panel-body">
+            <ol className="space-y-1.5">
               {actionItems.map((item, i) => (
                 <li key={i} className="signal-enter flex items-start gap-2 text-sm text-slate-200">
                   <Badge color={item.severity === 'high' ? 'red' : item.severity === 'medium' ? 'orange' : 'gray'}>{item.category}</Badge>
@@ -122,10 +111,10 @@ export function EdgeEngineTab({
         </CardTitle>
         <div className="grid gap-3 sm:grid-cols-2">
           {signals.map((s) => (
-            <div key={s.key} className={`rounded border p-3 ${STATUS_STYLE[s.status]}`}>
+            <div key={s.key} className={`border p-3 ${STATUS_STYLE[s.status]}`}>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-mono text-xs font-semibold tracking-wide text-slate-300 uppercase">{s.label}</span>
-                <span className={`font-scoreboard text-2xl leading-none ${STATUS_TEXT[s.status]}`}>{s.valueText}</span>
+                <span className={`num text-lg leading-none ${STATUS_TEXT[s.status]}`}>{s.valueText}</span>
               </div>
               <p className="mt-1.5 text-xs text-slate-500">{s.detail}</p>
             </div>

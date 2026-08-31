@@ -50,35 +50,37 @@ export function DataTable<T>({
     }
   };
 
+  const alignOf = (a?: 'left' | 'right' | 'center') =>
+    a === 'right' ? 'text-right' : a === 'center' ? 'text-center' : 'text-left';
+
   return (
-    <div className="arcade-panel overflow-x-auto rounded-md border-slate-700 bg-slate-950/40">
+    <div className="panel-flush overflow-x-auto border border-[color:var(--rule)]">
       <div style={{ maxHeight }} className="overflow-y-auto">
-        <table className="min-w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-900">
+        <table className="data-table min-w-full">
+          <thead>
             <tr>
               {columns.map((col) => (
                 <th
                   key={col.key}
                   onClick={() => col.sortable !== false && toggleSort(col.key)}
-                  className={`whitespace-nowrap border-b-2 border-slate-700 px-3 py-2 font-mono text-[11px] font-semibold tracking-wide text-slate-400 uppercase ${
-                    col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
-                  } ${col.sortable !== false ? 'cursor-pointer select-none hover:text-violet-300' : ''}`}
+                  className={`${alignOf(col.align)} ${col.sortable === false ? 'cursor-default' : ''}`}
+                  aria-sort={
+                    sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined
+                  }
                 >
                   {col.header}
-                  {sortKey === col.key && <span className="ml-1 text-violet-400">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                  {sortKey === col.key && <span className="ml-1">{sortDir === 'asc' ? '▲' : '▼'}</span>}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {sorted.map((row) => (
-              <tr key={rowKey(row)} className="border-b border-slate-800/60 hover:bg-violet-500/[0.06]">
+              <tr key={rowKey(row)}>
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`whitespace-nowrap px-3 py-2 text-slate-200 ${
-                      col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
-                    }`}
+                    className={`${alignOf(col.align)} ${col.align === 'right' ? 'num' : ''}`}
                   >
                     {col.render ? col.render(row) : col.accessor(row)}
                   </td>
@@ -87,7 +89,7 @@ export function DataTable<T>({
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={columns.length} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={columns.length} className="px-3 py-6 text-center text-muted">
                   No data to show.
                 </td>
               </tr>

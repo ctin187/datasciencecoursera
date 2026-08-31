@@ -42,6 +42,9 @@ export interface AvailablePlayerRow {
   vorPerGame: number | null;
   dropToNextAtPosition: number | null;
   marginalValueForMyTeam: number | null;
+  /** 'backend-vor' = real projection. 'sleeper-rank' = ordered by Sleeper relevance, no projection exists. */
+  valueSource: 'backend-vor' | 'sleeper-rank';
+  sleeperRank: number | null;
 }
 
 /**
@@ -65,9 +68,21 @@ export function buildAvailableBoard(params: {
   const { pool, draftedSleeperIds, rosterPositions, myCurrentPlayerIds } = params;
   const marginalTopN = params.marginalTopN ?? 40;
 
+  // Players without a VOR are kept, not dropped. Kickers, team defenses and
+  // IDP have no projection the backend can produce, and filtering them out
+  // here is what previously made those positions invisible on the board in a
+  // league that is required to start them. They sort after VOR-scored players
+  // and are ordered among themselves by Sleeper's own relevance rank - never
+  // given a fabricated VOR to make the sort uniform.
   const available = [...pool.values()]
-    .filter((p) => !draftedSleeperIds.has(p.sleeperId) && p.vorPerGame !== null)
-    .sort((a, b) => (b.vorPerGame ?? 0) - (a.vorPerGame ?? 0));
+    .filter((p) => !draftedSleeperIds.has(p.sleeperId))
+    .sort((a, b) => {
+      const aHas = a.vorPerGame !== null;
+      const bHas = b.vorPerGame !== null;
+      if (aHas && bHas) return (b.vorPerGame ?? 0) - (a.vorPerGame ?? 0);
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      return (a.sleeperRank ?? Infinity) - (b.sleeperRank ?? Infinity);
+    });
 
   const byPosition = new Map<string, PooledPlayer[]>();
   for (const p of available) {
@@ -87,10 +102,18 @@ export function buildAvailableBoard(params: {
     const posGroup = byPosition.get(p.position ?? '?') ?? [];
     const idxInPos = posGroup.findIndex((x) => x.sleeperId === p.sleeperId);
     const next = posGroup[idxInPos + 1];
-    const dropToNextAtPosition = next ? (p.vorPerGame ?? 0) - (next.vorPerGame ?? 0) : null;
+    // Positional drop-off is a VOR quantity. It is meaningless between two
+    // players who only have a relevance rank, so it stays null for them
+    // rather than reporting a difference of ranks as if it were points.
+    const dropToNextAtPosition =
+      next && p.vorPerGame !== null && next.vorPerGame !== null
+        ? p.vorPerGame - next.vorPerGame
+        : null;
 
+    // Marginal value runs the lineup optimizer, which is VOR-based; a
+    // rank-only player would contribute a meaningless 0.
     let marginalValueForMyTeam: number | null = null;
-    if (i < marginalTopN) {
+    if (i < marginalTopN && p.vorPerGame !== null) {
       const withCandidate = optimizeLineup(rosterPositions, [
         ...currentPool,
         { sleeperId: p.sleeperId, position: p.position, vorPerGame: p.vorPerGame },
@@ -106,6 +129,8 @@ export function buildAvailableBoard(params: {
       vorPerGame: p.vorPerGame,
       dropToNextAtPosition,
       marginalValueForMyTeam,
+      valueSource: p.valueSource,
+      sleeperRank: p.sleeperRank,
     };
   });
 }

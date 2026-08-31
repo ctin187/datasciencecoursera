@@ -1,216 +1,380 @@
 @import "tailwindcss";
 
-/*
- * "GRIDIRON TERMINAL" theme: an 80s/90s arcade football cabinet wired into a
- * modern quant terminal. Same trick as before - override Tailwind's
- * slate/violet color scales via @theme rather than rewriting className
- * strings across every component, so every existing bg-slate-900,
- * text-violet-400, etc. utility everywhere in the app resolves to this
- * palette automatically.
- *
- * slate  -> near-black charcoal terminal base (was navy)
- * violet -> electric arcade amber, the "brand"/primary accent (was bronze-gold)
- *
- * Semantic status colors (emerald=positive, rose=negative, amber=warning,
- * sky=info) are deliberately left as Tailwind's defaults - they already read
- * as clean "indicator light" colors on a dark background, and overriding them
- * too would fight the one signal (amber) that's supposed to mean "brand",
- * not "warning". Restraint here is what keeps the retro treatment from
- * turning into visual noise.
- */
+/* ==========================================================================
+   PATRIOTS FRONT-OFFICE ANALYTICS
+   A dense, information-first sports-statistics interface.
+
+   Reference feel: FanGraphs — table-heavy, compact controls, strong nav,
+   numbers first and chrome last. Explicitly NOT modern-SaaS: no oversized
+   cards, no large radii, no gradients, no decorative whitespace.
+
+   Palette is New England Patriots, not FanGraphs: white ground with navy,
+   red, silver and light gray. No FanGraphs green anywhere.
+
+   ---------------------------------------------------------------------------
+   READ THIS BEFORE EDITING THE SCALES BELOW.
+
+   The app was previously dark, and its ~9 tabs are written against Tailwind's
+   slate/violet utilities inline (bg-slate-900, text-slate-400, border-slate-700
+   and so on). Rather than rewrite every className in every tab — a large diff
+   with a real chance of missing spots and shipping an app that is half light
+   and half dark — the slate ramp is INVERTED here: slate-950 is white and
+   slate-50 is near-black.
+
+   That is deliberate and it is the opposite of Tailwind's convention. It means
+   `bg-slate-950` reads as "page background" and `text-slate-100` reads as
+   "primary text", which is exactly how the existing markup already uses them.
+
+   For NEW code, prefer the semantic classes at the bottom of this file
+   (.panel, .data-table, .filter-chip, .text-muted, .num-pos …). They say what
+   they mean and do not require knowing about the inversion.
+   ========================================================================== */
+
 @theme {
-  --color-slate-50: #ffffff;
-  --color-slate-100: #eef1f4;
-  --color-slate-200: #dbe0e6;
-  --color-slate-300: #b8c0ca;
-  --color-slate-400: #8a94a1;
-  --color-slate-500: #626d7a;
-  --color-slate-600: #414954;
-  --color-slate-700: #262c35;
-  --color-slate-800: #171b21;
-  --color-slate-900: #0e1116;
-  --color-slate-950: #08090c;
+  /* --- Neutral ramp, INVERTED: high number = light, low number = dark --- */
+  --color-slate-950: #ffffff;  /* page ground */
+  --color-slate-900: #ffffff;  /* panel surface */
+  --color-slate-800: #dfe3e8;  /* hairline borders */
+  --color-slate-700: #c8cdd3;  /* stronger borders, dividers */
+  --color-slate-600: #7a838c;  /* faint label text */
+  --color-slate-500: #6b757f;  /* secondary/muted text */
+  --color-slate-400: #55606b;  /* label text */
+  --color-slate-300: #3a4652;  /* strong secondary text */
+  --color-slate-200: #24313d;  /* near-primary text */
+  --color-slate-100: #0b1b2b;  /* primary text (navy-black) */
+  --color-slate-50:  #002244;  /* Patriots navy, headings */
 
-  --color-violet-100: #fff3de;
-  --color-violet-200: #ffe6b3;
-  --color-violet-300: #ffd27a;
-  --color-violet-400: #ffbc47;
-  --color-violet-500: #ffa41f;
-  --color-violet-600: #e07f00;
-  --color-violet-700: #a85f00;
-  --color-violet-800: #6b3d00;
-  --color-violet-900: #442700;
-  --color-violet-950: #2a1800;
+  /* --- Brand accent ramp: Patriots navy. Was the app's "violet". --- */
+  --color-violet-50:  #eaeff5;
+  --color-violet-100: #d5dfeb;
+  --color-violet-200: #a9bed6;
+  --color-violet-300: #1d4f80;  /* accent TEXT - must stay legible on white */
+  --color-violet-400: #002244;  /* accent text / borders */
+  --color-violet-500: #1d4f80;
+  --color-violet-600: #002244;  /* primary brand — buttons, active nav */
+  --color-violet-700: #001b36;
+  --color-violet-800: #001428;
+  --color-violet-900: #000e1c;
+  --color-violet-950: #000811;
 
-  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
-  /* Chunky true pixel/8-bit font - SHORT strings only: headings, labels, buttons, badges. */
-  --font-display: 'Press Start 2P', var(--font-mono);
-  /* CRT terminal monospace - readable at size, used for scoreboard-style numeric readouts. */
-  --font-scoreboard: 'VT323', var(--font-mono);
+  /* --- Status colors, darkened for contrast on white.
+         Each ramp is inverted the same way the neutrals are: the high
+         numbers (700-950), which the old dark theme used for washes and
+         borders, become the PALE end here, so `bg-emerald-950/20` still
+         reads as "faint positive tint" and `border-rose-700/60` still
+         reads as "negative border". The low numbers stay saturated
+         because they are used for text. --- */
+  --color-emerald-300: #1a7a4a;
+  --color-emerald-400: #12693d;
+  --color-emerald-500: #0f5c35;   /* meter fill */
+  --color-emerald-600: #0c4d2c;
+  --color-emerald-700: #7bb195;   /* borders */
+  --color-emerald-950: #cfe6da;   /* washes (used at 20-30% alpha) */
+
+  --color-rose-300: #c60c30;      /* Patriots red doubles as the negative signal */
+  --color-rose-400: #b00b2b;
+  --color-rose-500: #9a0a26;
+  --color-rose-600: #85091f;
+  --color-rose-700: #e2a3b0;      /* borders */
+  --color-rose-800: #f0c9d1;
+  --color-rose-950: #f7d5dd;      /* washes (used at 20% alpha) */
+
+  /* `red-*` is only reached through the Meter's negative tone. */
+  --color-red-400: #b00b2b;
+  --color-red-500: #c60c30;
+
+  --color-amber-300: #9a6700;
+  --color-amber-400: #8a5c00;
+  --color-amber-500: #b07d00;     /* meter fill - needs to read as a fill, not text */
+
+  --color-sky-300: #1d4f80;
+  --color-sky-400: #17416a;
+  --color-sky-500: #1d4f80;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-display: var(--font-sans);
+  --font-scoreboard: var(--font-mono);
 }
 
+/* --- Semantic tokens. Prefer these in new code. --- */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+
+  --pats-navy: #002244;
+  --pats-red: #c60c30;
+  --pats-silver: #b0b7bc;
+  --pats-white: #ffffff;
+  --pats-gray-50: #f7f8f9;
+  --pats-gray-100: #eef0f2;
+  --pats-gray-200: #dfe3e8;
+  --pats-gray-300: #c8cdd3;
+
+  --ink: #0b1b2b;
+  --ink-muted: #6b757f;
+  --rule: #dfe3e8;
+  --rule-strong: #c8cdd3;
+
+  --radius: 2px;         /* sharp. this is a stats table, not a marketing page */
+  --row-h: 26px;         /* dense table rows */
+  --pad-x: 8px;
+  --pad-y: 4px;
 }
 
-html, body, #root {
-  height: 100%;
-}
+html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  color: var(--color-slate-100);
+  background: var(--pats-gray-50);
+  color: var(--ink);
   font-family: var(--font-sans);
-  background-color: var(--color-slate-950);
-  background-image:
-    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255, 164, 31, 0.07), transparent 60%),
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: auto, 28px 28px, 28px 28px;
-  background-attachment: fixed;
+  font-size: 13px;               /* dense by default */
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
+::-webkit-scrollbar { height: 10px; width: 10px; }
+::-webkit-scrollbar-thumb { background: var(--pats-silver); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: #98a0a6; }
+::-webkit-scrollbar-track { background: var(--pats-gray-100); }
+
+table { border-collapse: collapse; }
+
+/* ==========================================================================
+   Panels — flat, bordered, square. No shadow, no gradient, no big radius.
+   ========================================================================== */
+
+.panel {
+  background: var(--pats-white);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
 }
-::-webkit-scrollbar-thumb {
-  background: var(--color-slate-700);
-  border-radius: 4px;
+
+/* Navy rule across the top of a panel: the "section" marker. */
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--pats-navy);
+  color: #fff;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
-::-webkit-scrollbar-track {
+
+.panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.panel-subtitle {
+  font-size: 11px;
+  color: var(--ink-muted);
+  padding: 6px 10px 0;
+  margin: 0;
+}
+
+/* Panels own their internal gutter, so a tab can drop content straight into
+   <Card> without every call site remembering the padding. The header bar is
+   excluded (it is padded already), and `.panel-flush` opts an element out so
+   a data table can run edge to edge. */
+.panel > :not(.panel-head):not(.panel-flush) { padding-left: 10px; padding-right: 10px; }
+.panel > :not(.panel-head):not(.panel-flush):first-child { padding-top: 8px; }
+.panel > .panel-head + :not(.panel-flush) { padding-top: 8px; }
+.panel > :last-child { padding-bottom: 10px; }
+.panel > .panel-flush:last-child { padding-bottom: 0; }
+.panel > .panel-body { padding: 8px 10px 10px; }
+.panel > .panel-subtitle { padding: 6px 10px 0; }
+
+/* A table that spans the full panel width: it keeps its top/bottom rules but
+   sheds the side borders that would otherwise double up on the panel's own. */
+.panel > .panel-flush { border-left: 0; border-right: 0; }
+
+/* ==========================================================================
+   Data tables — the core of the interface.
+   ========================================================================== */
+
+.data-table {
+  width: 100%;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--pats-navy);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 5px var(--pad-x);
+  white-space: nowrap;
+  border-bottom: 2px solid var(--pats-red);
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table thead th:hover { background: #013057; }
+
+.data-table tbody td {
+  padding: var(--pad-y) var(--pad-x);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+  height: var(--row-h);
+}
+
+.data-table tbody tr:nth-child(even) { background: var(--pats-gray-50); }
+.data-table tbody tr:hover { background: #e8eef5; }
+
+.data-table .num { text-align: right; font-family: var(--font-mono); }
+
+/* ==========================================================================
+   Compact controls
+   ========================================================================== */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 5px 0 7px;
+  align-items: center;
+}
+
+.filter-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  color: #3a4652;
+  cursor: pointer;
+  line-height: 1.3;
+}
+.filter-chip:hover { border-color: var(--pats-navy); color: var(--pats-navy); }
+.filter-chip.is-active {
+  background: var(--pats-navy);
+  border-color: var(--pats-navy);
+  color: #fff;
+}
+.filter-count { opacity: 0.6; font-weight: 400; margin-left: 3px; }
+.filter-chip.is-active .filter-count { opacity: 0.75; }
+
+.btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--pats-navy);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { background: var(--pats-navy); border-color: var(--pats-navy); color: #fff; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+.btn-primary { background: var(--pats-navy); border-color: var(--pats-navy); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #013057; }
+
+/* ==========================================================================
+   Notices — flat, left-ruled, no rounded "alert card" look.
+   ========================================================================== */
+
+.notice {
+  background: var(--pats-gray-100);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--pats-navy);
+  border-radius: 0;
+  padding: 7px 10px;
+}
+.notice-error {
+  background: #fdf0f2;
+  border: 1px solid #f0c9d1;
+  border-left: 3px solid var(--pats-red);
+  border-radius: 0;
+  padding: 7px 10px;
+  color: #85091f;
+}
+
+/* ==========================================================================
+   Typography / numeric helpers
+   ========================================================================== */
+
+.text-muted { color: var(--ink-muted); }
+.num        { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.num-pos    { font-family: var(--font-mono); color: #12693d; }
+.num-neg    { font-family: var(--font-mono); color: var(--pats-red); }
+.num-warn   { font-family: var(--font-mono); color: #8a5c00; }
+.num-accent { font-family: var(--font-mono); color: var(--pats-navy); }
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--pats-navy);
+  line-height: 1.15;
+}
+
+/* ==========================================================================
+   App shell
+   ========================================================================== */
+
+.app-header {
+  background: var(--pats-navy);
+  border-bottom: 3px solid var(--pats-red);
+}
+
+.app-nav {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  background: #001b36;
+}
+
+.nav-tab {
+  padding: 7px 13px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a9bed6;
+  border: none;
+  border-bottom: 3px solid transparent;
   background: transparent;
+  white-space: nowrap;
+  cursor: pointer;
 }
-
-table {
-  border-collapse: collapse;
-}
-
-/* ---------------------------------------------------------------------- */
-/* CRT effects - toggleable (see hooks/useCrtEffects.ts), always subtle.   */
-/* ---------------------------------------------------------------------- */
-
-.crt-root {
-  position: relative;
-  isolation: isolate;
-}
-
-.crt-on::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 60;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0) 0px,
-    rgba(0, 0, 0, 0) 1px,
-    rgba(0, 0, 0, 0.11) 2px,
-    rgba(0, 0, 0, 0) 3px
-  );
-  mix-blend-mode: multiply;
-}
-
-.crt-on::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 59;
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.4) 100%);
+.nav-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.nav-tab.is-active {
+  color: #fff;
+  background: var(--pats-navy);
+  border-bottom-color: var(--pats-red);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .crt-on::after {
-    animation: crt-flicker 7s ease-in-out infinite;
-  }
-}
-
-@keyframes crt-flicker {
-  0%, 96%, 100% { opacity: 1; }
-  97% { opacity: 0.94; }
-  98% { opacity: 1; }
-  99% { opacity: 0.97; }
-}
-
-/* ---------------------------------------------------------------------- */
-/* Arcade panel: the console-bezel look shared by Card/DataTable/etc.     */
-/* ---------------------------------------------------------------------- */
-
-.arcade-panel {
-  position: relative;
-  border: 1px solid var(--color-slate-700);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
-}
-
-.arcade-panel-accent::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 14px;
-  right: 14px;
-  height: 2px;
-  background: var(--color-violet-500);
-  opacity: 0.7;
-}
-
-/* Small pixel "bolt" accents at the top corners of a panel - decorative,
-   evokes a bolted arcade-cabinet control panel without needing precise
-   pixel-notch clip-paths that are hard to get right without live rendering. */
-.pixel-bolts::before,
-.pixel-bolts::after {
-  content: "";
-  position: absolute;
-  top: 6px;
-  width: 4px;
-  height: 4px;
-  background: var(--color-slate-600);
-}
-.pixel-bolts::before { left: 6px; }
-.pixel-bolts::after { right: 6px; }
-
-/* ---------------------------------------------------------------------- */
-/* Meter fill glow - very small, only on the filled segment of Meter.tsx. */
-/* ---------------------------------------------------------------------- */
-
-@media (prefers-reduced-motion: no-preference) {
-  .meter-fill-live {
-    animation: meter-glow 2.4s ease-in-out infinite;
-  }
-}
-
-@keyframes meter-glow {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.18); }
-}
-
-/* Blinking text cursor, used sparingly (simulation-running state, live badges). */
-@media (prefers-reduced-motion: no-preference) {
-  .terminal-cursor::after {
-    content: "\2588";
-    margin-left: 2px;
-    animation: cursor-blink 1s steps(1) infinite;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .terminal-cursor::after {
-    content: "\2588";
-    margin-left: 2px;
-  }
-}
-@keyframes cursor-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
-/* New-content slide-in - used only for freshly-appeared signals/notifications. */
-@media (prefers-reduced-motion: no-preference) {
-  .signal-enter {
-    animation: signal-enter 320ms ease-out;
-  }
+  .signal-enter { animation: signal-enter 200ms ease-out; }
 }
 @keyframes signal-enter {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

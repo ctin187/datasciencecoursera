@@ -7,7 +7,6 @@ import { explainDraftPick } from '../../lib/explain';
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
-import { Mascot } from '../ui/Mascot';
 import { Meter } from '../ui/Meter';
 
 /** Presentation-only: scales a marginal-VOR pick recommendation onto the Meter's 0-100 fill. Not a real bounded metric. */
@@ -64,23 +63,40 @@ export function DraftAssistantTab({
   );
 
   const filtered = posFilter === 'ALL' ? available : available.filter((p) => p.position === posFilter);
-  const positions = [...new Set(available.map((p) => p.position ?? '?'))].sort();
+  // Order filters the way a lineup card reads, so K/DEF/IDP sit where a manager
+  // expects rather than alphabetically ahead of the skill positions.
+  const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'];
+  const positions = [...new Set(available.map((p) => p.position ?? '?'))].sort(
+    (a, b) => {
+      const ai = POSITION_ORDER.indexOf(a);
+      const bi = POSITION_ORDER.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
+    },
+  );
+  const countAt = (pos: string) => available.filter((p) => p.position === pos).length;
 
   const columns: Column<AvailablePlayerRow>[] = [
     { key: 'name', header: 'Player', accessor: (p) => p.name ?? p.sleeperId, render: (p) => (
-      <span>{p.name ?? p.sleeperId} <span className="text-slate-500">({p.position ?? '?'}{p.team ? ` · ${p.team}` : ''})</span></span>
+      <span>{p.name ?? p.sleeperId} <span className="text-muted">({p.position ?? '?'}{p.team ? ` · ${p.team}` : ''})</span></span>
     ) },
     { key: 'vor', header: 'VOR/gm', accessor: (p) => p.vorPerGame ?? -999, align: 'right', render: (p) => (
-      <span className={(p.vorPerGame ?? -1) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{fmt(p.vorPerGame)}</span>
+      p.vorPerGame === null
+        ? <span className="text-muted" title="No projection exists for this position - ranked by Sleeper relevance instead">—</span>
+        : <span className={p.vorPerGame >= 0 ? 'num-pos' : 'num-neg'}>{fmt(p.vorPerGame)}</span>
+    ) },
+    { key: 'rank', header: 'Sleeper Rk', accessor: (p) => p.sleeperRank ?? 999999, align: 'right', render: (p) => (
+      p.sleeperRank != null
+        ? <span className="text-muted" title="Sleeper's own relevance ordinal - not a fantasy projection">#{p.sleeperRank}</span>
+        : <span className="text-muted">—</span>
     ) },
     { key: 'drop', header: 'Drop to Next at Pos', accessor: (p) => p.dropToNextAtPosition ?? -999, align: 'right', render: (p) => (
-      <span className={p.dropToNextAtPosition != null && p.dropToNextAtPosition > 1.5 ? 'font-semibold text-amber-400' : 'text-slate-400'}>
+      <span className={p.dropToNextAtPosition != null && p.dropToNextAtPosition > 1.5 ? 'font-semibold num-warn' : 'text-muted'}>
         {p.dropToNextAtPosition != null ? p.dropToNextAtPosition.toFixed(2) : '—'}
       </span>
     ) },
     { key: 'marginal', header: 'Marginal Value For You', accessor: (p) => p.marginalValueForMyTeam ?? -999, align: 'right', render: (p) => (
-      <span className={(p.marginalValueForMyTeam ?? -1) > 0 ? 'font-semibold text-violet-300' : 'text-slate-500'}>
-        {p.marginalValueForMyTeam != null ? fmt(p.marginalValueForMyTeam) : 'not computed'}
+      <span className={(p.marginalValueForMyTeam ?? -1) > 0 ? 'font-semibold num-accent' : 'text-muted'}>
+        {p.marginalValueForMyTeam != null ? fmt(p.marginalValueForMyTeam) : '—'}
       </span>
     ) },
   ];
@@ -95,14 +111,11 @@ export function DraftAssistantTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card>
-        <div className="mb-3 flex items-center gap-3">
-          <Mascot state="draft" size={48} className="hidden shrink-0 sm:block" />
-          <CardTitle subtitle={`Draft type: ${draft.type}${board?.isNomination ? ' (nomination order shown, not a strict turn clock)' : ''}`}>
-            Draft Command
-          </CardTitle>
-        </div>
+        <CardTitle subtitle={`Draft type: ${draft.type}${board?.isNomination ? ' (nomination order shown, not a strict turn clock)' : ''}`}>
+          Draft Command
+        </CardTitle>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Status" value={<Badge color="purple">{draft.status.replace('_', ' ')}</Badge>} />
           <StatTile label="Picks Made" value={board?.picksMade ?? 0} />
@@ -112,7 +125,7 @@ export function DraftAssistantTab({
         <button
           onClick={refresh}
           disabled={refreshing}
-          className="mt-3 min-h-[36px] rounded border border-slate-700 px-3 py-1.5 font-mono text-[11px] font-semibold tracking-wide text-slate-300 uppercase hover:border-violet-600 hover:text-violet-400 disabled:opacity-50"
+          className="btn mt-2"
         >
           {refreshing ? 'Refreshing…' : 'Refresh Picks'}
         </button>
@@ -120,21 +133,40 @@ export function DraftAssistantTab({
         {loading && <p className="mt-2 text-xs text-slate-500">Loading draft picks…</p>}
       </Card>
 
-      {!pool.backendConfigured && (
-        <Card>
-          <p className="text-slate-400">The analytics backend isn't configured, so player values (VOR) aren't available — the board can't be ranked.</p>
+      {pool.fullFallback && (
+        <Card className="notice">
+          <p className="text-sm">
+            <strong>Projections unavailable</strong> — {pool.backendConfigured
+              ? "the analytics backend didn't respond"
+              : "the analytics backend isn't configured"}, so there is no VOR for anyone right now.
+            The board below is ordered by <strong>Sleeper's own relevance rank</strong> across every position your
+            league rosters. That's real Sleeper data, not a projection — treat it as a sane draft order, not a
+            valuation.
+          </p>
+        </Card>
+      )}
+
+      {!pool.fullFallback && pool.unprojectedPositions.length > 0 && (
+        <Card className="notice">
+          <p className="text-sm">
+            <strong>{pool.unprojectedPositions.join(', ')}</strong>{' '}
+            {pool.unprojectedPositions.length === 1 ? 'has' : 'have'} no projection source — nflverse doesn't publish
+            the inputs the model needs for {pool.unprojectedPositions.length === 1 ? 'it' : 'them'}. Those players are
+            still on the board, ordered by <strong>Sleeper relevance rank</strong> and shown with "—" under VOR so
+            they're never mistaken for a projected value. Filter by position to draft them.
+          </p>
         </Card>
       )}
 
       {pool.loading && (
         <Card>
-          <p className="text-center text-slate-400">Loading the full player projection pool…</p>
+          <p className="text-center text-muted">Loading the full player projection pool…</p>
         </Card>
       )}
 
-      {pool.error && (
-        <Card className="border-rose-800">
-          <p className="text-rose-300">{pool.error}</p>
+      {pool.error && !pool.fullFallback && (
+        <Card className="notice-error">
+          <p>{pool.error}</p>
         </Card>
       )}
 
@@ -160,23 +192,25 @@ export function DraftAssistantTab({
 
       {available.length > 0 && (
         <Card>
-          <CardTitle subtitle={`${available.length} undrafted players with a projection. "Marginal value for you" is computed for the top 40 by VOR only, to keep this fast.`}>
+          <CardTitle
+            subtitle={`${available.length} undrafted players across every position your league rosters. VOR-projected players rank first; K/DEF/IDP follow, ordered by Sleeper rank. "Marginal value for you" is computed for the top 40 by VOR only, to keep this fast.`}
+          >
             Best Available
           </CardTitle>
-          <div className="mb-3 flex flex-wrap gap-1.5">
+          <div className="filter-bar">
             <button
               onClick={() => setPosFilter('ALL')}
-              className={`rounded border px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase ${posFilter === 'ALL' ? 'border-violet-500 bg-violet-500/20 text-violet-300' : 'border-slate-700 text-slate-400'}`}
+              className={`filter-chip${posFilter === 'ALL' ? ' is-active' : ''}`}
             >
-              ALL
+              ALL <span className="filter-count">{available.length}</span>
             </button>
             {positions.map((pos) => (
               <button
                 key={pos}
                 onClick={() => setPosFilter(pos)}
-                className={`rounded border px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase ${posFilter === pos ? 'border-violet-500 bg-violet-500/20 text-violet-300' : 'border-slate-700 text-slate-400'}`}
+                className={`filter-chip${posFilter === pos ? ' is-active' : ''}`}
               >
-                {pos}
+                {pos} <span className="filter-count">{countAt(pos)}</span>
               </button>
             ))}
           </div>

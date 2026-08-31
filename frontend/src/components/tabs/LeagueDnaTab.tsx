@@ -72,7 +72,7 @@ export function LeagueDnaTab({
   const loading = draftPicks.loading || transactions.loading || history.loading;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card>
         <CardTitle
           subtitle={`Draft tendencies are pooled across ${seasonsFetched} season${seasonsFetched === 1 ? '' : 's'} of real draft data (Franchise History's previous_league_id walk). Trade/waiver/FAAB activity is this season only. No ADP, no external market comparison anywhere here - only this league's own data.`}
@@ -86,7 +86,7 @@ export function LeagueDnaTab({
         <DataTable rows={profiles} columns={columns} rowKey={(p) => p.ownerId} defaultSortKey="trades" />
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {profiles
           .filter((p) => p.positionTendencies.length > 0)
           .map((p) => (

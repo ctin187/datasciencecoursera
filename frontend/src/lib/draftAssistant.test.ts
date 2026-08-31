@@ -38,10 +38,10 @@ describe('computeDraftBoard', () => {
 describe('buildAvailableBoard', () => {
   it('ranks by VOR, computes positional drop-off, and marginal value for a specific roster', () => {
     const pool = new Map([
-      ['rb_elite', { sleeperId: 'rb_elite', position: 'RB', vorPerGame: 10, name: 'Elite RB', team: 'AAA', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0 }],
-      ['rb_good', { sleeperId: 'rb_good', position: 'RB', vorPerGame: 6, name: 'Good RB', team: 'BBB', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0 }],
-      ['wr_elite', { sleeperId: 'wr_elite', position: 'WR', vorPerGame: 8, name: 'Elite WR', team: 'DDD', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0 }],
-      ['drafted_rb', { sleeperId: 'drafted_rb', position: 'RB', vorPerGame: 20, name: 'Drafted RB', team: 'FFF', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0 }],
+      ['rb_elite', { sleeperId: 'rb_elite', position: 'RB', vorPerGame: 10, name: 'Elite RB', team: 'AAA', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0, valueSource: 'backend-vor' as const, sleeperRank: null }],
+      ['rb_good', { sleeperId: 'rb_good', position: 'RB', vorPerGame: 6, name: 'Good RB', team: 'BBB', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0, valueSource: 'backend-vor' as const, sleeperRank: null }],
+      ['wr_elite', { sleeperId: 'wr_elite', position: 'WR', vorPerGame: 8, name: 'Elite WR', team: 'DDD', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0, valueSource: 'backend-vor' as const, sleeperRank: null }],
+      ['drafted_rb', { sleeperId: 'drafted_rb', position: 'RB', vorPerGame: 20, name: 'Drafted RB', team: 'FFF', gsisId: '', projectedPointsPerGame: 0, restOfSeasonPoints: 0, valueSource: 'backend-vor' as const, sleeperRank: null }],
     ]);
 
     const board = buildAvailableBoard({

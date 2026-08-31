@@ -8,7 +8,6 @@ import { extractFaabHistory, computeRateDistribution, suggestBid } from '../../l
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
-import { Mascot } from '../ui/Mascot';
 import { Meter } from '../ui/Meter';
 
 function fmt(n: number | null): string {
@@ -161,22 +160,21 @@ export function WaiverWireTab({
   const topTarget = result.targets[0];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {topTarget && (
         <Card>
-          <div className="flex items-center gap-4">
-            <Mascot state="waiver" size={56} className="hidden shrink-0 sm:block" />
-            <div className="min-w-0 flex-1">
-              <div className="font-display text-[9px] tracking-wide text-violet-400">TOP WAIVER RADAR SIGNAL</div>
-              <div className="mt-1 truncate font-scoreboard text-2xl text-slate-100">{topTarget.name ?? topTarget.sleeper_id}</div>
-              <div className="mt-2">
-                <Meter
-                  value={vorToMeterFill(topTarget.vor_per_game)}
-                  displayValue={topTarget.vor_per_game != null ? `${topTarget.vor_per_game >= 0 ? '+' : ''}${fmt(topTarget.vor_per_game)} VOR/gm` : '—'}
-                  tone={(topTarget.vor_per_game ?? 0) > 0 ? 'positive' : 'negative'}
-                  sublabel={topTarget.position ?? undefined}
-                />
-              </div>
+          <div className="min-w-0">
+            <div className="stat-label">Top Waiver Target</div>
+            <div className="num mt-0.5 truncate text-lg font-semibold text-slate-100">
+              {topTarget.name ?? topTarget.sleeper_id}
+            </div>
+            <div className="mt-1.5">
+              <Meter
+                value={vorToMeterFill(topTarget.vor_per_game)}
+                displayValue={topTarget.vor_per_game != null ? `${topTarget.vor_per_game >= 0 ? '+' : ''}${fmt(topTarget.vor_per_game)} VOR/gm` : '—'}
+                tone={(topTarget.vor_per_game ?? 0) > 0 ? 'positive' : 'negative'}
+                sublabel={topTarget.position ?? undefined}
+              />
             </div>
           </div>
         </Card>

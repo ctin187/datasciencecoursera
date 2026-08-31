@@ -80,7 +80,7 @@ export function FranchiseHistoryTab({ history, userId }: { history: LeagueHistor
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card>
         <CardTitle subtitle="Walked from Sleeper's own previous_league_id chain, bounded to the last few seasons to keep the request count reasonable. Champion/runner-up come from the season's winners_bracket where available; older or non-standard leagues fall back to best regular-season record, labeled as such.">
           Franchise History

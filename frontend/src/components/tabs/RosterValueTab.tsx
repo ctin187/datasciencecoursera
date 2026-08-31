@@ -9,34 +9,50 @@ function fmt(n: number | null): string {
   return n === null ? '—' : n.toFixed(1);
 }
 
+/**
+ * One lineup slot, laid out as a fixed three-column grid so slot labels,
+ * names and figures line up down the column instead of drifting apart on a
+ * wide screen. Rows carry only a bottom rule - stacked full borders would
+ * double up into a 2px ladder.
+ */
 function PlayerRow({ label, player, mismatch }: { label: string; player: VorPlayer | null; mismatch?: boolean | null }) {
-  if (!player) {
-    return (
-      <div className="flex items-center justify-between rounded-md border border-slate-800/60 px-2.5 py-1.5 text-sm">
-        <span className="w-14 text-xs font-semibold text-slate-500">{label}</span>
-        <span className="text-slate-600">Empty</span>
-        <span />
-      </div>
-    );
-  }
   return (
-    <div className="flex items-center justify-between rounded-md border border-slate-800/60 px-2.5 py-1.5 text-sm">
-      <span className="w-14 text-xs font-semibold text-slate-500">{label}</span>
-      <span className={mismatch ? 'text-amber-400' : 'text-slate-200'} title={mismatch ? 'Slot/position mismatch reported by backend' : undefined}>
-        {player.name ?? player.sleeper_id} <span className="text-slate-500">({player.position ?? '?'}{player.team ? ` · ${player.team}` : ''})</span>
-      </span>
-      <span className="text-right text-xs text-slate-400">
-        {player.has_projection ? (
-          <>
-            {fmt(player.projected_points_per_game)} pts/g
-            <span className={`ml-1.5 font-semibold ${player.vor_per_game != null && player.vor_per_game >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {player.vor_per_game != null ? `${player.vor_per_game >= 0 ? '+' : ''}${fmt(player.vor_per_game)} VOR` : ''}
+    <div className="grid grid-cols-[44px_1fr_auto] items-center gap-2 border-b border-[color:var(--rule)] px-1 py-1 text-[12px] last:border-b-0">
+      <span className="stat-label">{label}</span>
+      {player ? (
+        <>
+          <span
+            className={`truncate ${mismatch ? 'text-amber-400' : 'text-slate-200'}`}
+            title={mismatch ? 'Slot/position mismatch reported by backend' : undefined}
+          >
+            {player.name ?? player.sleeper_id}{' '}
+            <span className="text-slate-500">
+              ({player.position ?? '?'}{player.team ? ` · ${player.team}` : ''})
             </span>
-          </>
-        ) : (
-          <span className="text-slate-600">no projection ({player.reason ?? 'unknown'})</span>
-        )}
-      </span>
+          </span>
+          <span className="text-right text-[11px] whitespace-nowrap text-slate-400">
+            {player.has_projection ? (
+              <>
+                <span className="num">{fmt(player.projected_points_per_game)}</span> pts/g
+                <span
+                  className={`num ml-2 font-semibold ${player.vor_per_game != null && player.vor_per_game >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                >
+                  {player.vor_per_game != null ? `${player.vor_per_game >= 0 ? '+' : ''}${fmt(player.vor_per_game)} VOR` : ''}
+                </span>
+              </>
+            ) : (
+              <span className="text-slate-600" title={player.reason ?? undefined}>
+                no projection
+              </span>
+            )}
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="text-slate-600">Empty</span>
+          <span />
+        </>
+      )}
     </div>
   );
 }
@@ -47,7 +63,7 @@ export function RosterValueTab({ data, userId, health }: { data: LeagueData; use
       <Card>
         <CardTitle>Roster Value (VOR)</CardTitle>
         <p className="text-slate-400">
-          The analytics backend isn't configured (<code className="rounded bg-slate-800 px-1 py-0.5">VITE_API_BASE_URL</code> is unset), so
+          The analytics backend isn't configured (<code className="bg-slate-800 px-1 py-0.5">VITE_API_BASE_URL</code> is unset), so
           projections and value-over-replacement can't be computed. This tab intentionally shows nothing rather than a number it can't
           back up.
         </p>
@@ -111,7 +127,7 @@ export function RosterValueTab({ data, userId, health }: { data: LeagueData; use
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card>
         <CardTitle
           subtitle={`Season ${result.season}, as of week ${result.as_of_week} (latest cached: week ${result.latest_cached_week}). ${result.games_remaining} games remaining. Source: nflverse play-by-play + Sleeper roster data.`}
@@ -133,7 +149,7 @@ export function RosterValueTab({ data, userId, health }: { data: LeagueData; use
             <StatTile label="Projected Starters" value={`${myTeam.starters_with_projection}/${myTeam.starters.length}`} />
             <StatTile label="Bench Size" value={myTeam.bench.length} />
           </div>
-          <div className="mt-4 space-y-1.5">
+          <div className="mt-2 border border-[color:var(--rule)]">
             {myTeam.starters.map((s: StarterSlot, i: number) => (
               <PlayerRow key={i} label={s.slot} player={s.player} mismatch={s.slot_mismatch} />
             ))}
@@ -141,7 +157,7 @@ export function RosterValueTab({ data, userId, health }: { data: LeagueData; use
           {myTeam.bench.length > 0 && (
             <>
               <p className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">Bench</p>
-              <div className="space-y-1.5">
+              <div className="border border-[color:var(--rule)]">
                 {myTeam.bench.map((p, i) => (
                   <PlayerRow key={i} label="BN" player={p} />
                 ))}
