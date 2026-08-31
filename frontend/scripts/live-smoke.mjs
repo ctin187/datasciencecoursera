@@ -56,7 +56,7 @@ const BACKEND = process.env.BACKEND || 'https://fantasy-dynasty-backend.onrender
 
 const health = await page.evaluate(async (base) => {
   try {
-    const r = await fetch(`${base}/health`);
+    const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(90000) });
     return { ok: r.ok, status: r.status, body: await r.json() };
   } catch (e) {
     return { ok: false, status: 0, error: String(e) };
@@ -68,7 +68,7 @@ if (health.body) console.log('      health:', JSON.stringify(health.body).slice(
 const proj = await page.evaluate(async (base) => {
   const q = new URLSearchParams({ scoring: JSON.stringify({ rec: 1 }), limit: '5' });
   try {
-    const r = await fetch(`${base}/projections?${q}`);
+    const r = await fetch(`${base}/projections?${q}`, { signal: AbortSignal.timeout(120000) });
     const j = await r.json();
     return { ok: r.ok, status: r.status, count: j?.players?.length ?? 0, sample: j?.players?.[0] ?? null };
   } catch (e) {
@@ -85,10 +85,10 @@ if (proj.sample) console.log('      sample:', JSON.stringify(proj.sample).slice(
 const coverage = await page.evaluate(async (base) => {
   const q = new URLSearchParams({
     scoring: JSON.stringify({ rec: 1, idp_tkl_solo: 1.5, idp_sack: 4, fgm: 3, xpm: 1 }),
-    limit: '2000',
+    limit: '400',
   });
   try {
-    const r = await fetch(`${base}/projections?${q}`);
+    const r = await fetch(`${base}/projections?${q}`, { signal: AbortSignal.timeout(120000) });
     const j = await r.json();
     const counts = {};
     for (const p of j?.players ?? []) counts[p.position ?? '?'] = (counts[p.position ?? '?'] ?? 0) + 1;

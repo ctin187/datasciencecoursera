@@ -27,6 +27,10 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    # A backend that accepts the connection then stalls should fail this run
+    # quickly, not sit on a runner. The in-page fetches carry their own
+    # deadlines too; this is the backstop.
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
