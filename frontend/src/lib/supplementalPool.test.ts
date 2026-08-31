@@ -41,8 +41,11 @@ const players: PlayersMap = Object.fromEntries(
 ) as unknown as PlayersMap;
 
 describe('unprojectedPositions', () => {
-  it('names exactly the rostered positions the backend cannot project', () => {
-    expect(unprojectedPositions(detectLeagueFormat(IDP_LEAGUE)).sort()).toEqual(['DB', 'DEF', 'DL', 'K', 'LB']);
+  it('names only team defense - every other rostered position is projected', () => {
+    // K and IDP were here until nflverse's kicking and defensive columns were
+    // wired into the scoring engine. A team defense has no per-player stat
+    // line to project, so it is the one position that still needs a fallback.
+    expect(unprojectedPositions(detectLeagueFormat(IDP_LEAGUE))).toEqual(['DEF']);
   });
 
   it('is empty for a standard league, so nothing is supplemented needlessly', () => {
@@ -53,20 +56,43 @@ describe('unprojectedPositions', () => {
 describe('buildSupplementalPool', () => {
   const pool = buildSupplementalPool(players, detectLeagueFormat(IDP_LEAGUE), new Set());
 
-  it('includes K, DEF and every IDP position', () => {
+  it('includes team defenses', () => {
     const positions = new Set([...pool.values()].map((p) => p.position));
-    expect(positions).toEqual(new Set(['K', 'DEF', 'DL', 'LB', 'DB']));
+    expect(positions).toEqual(new Set(['DEF']));
   });
 
-  it('does NOT include QB/RB - those come from the backend with a real projection', () => {
-    expect(pool.has('qb1')).toBe(false);
-    expect(pool.has('rb1')).toBe(false);
+  it('does NOT include any position the backend projects', () => {
+    // Everything here now arrives with a real VOR, so supplementing it would
+    // shadow a real number with a relevance ordinal.
+    for (const id of ['qb1', 'rb1', 'k1', 'k2', 'dl1', 'lb1', 'db1']) {
+      expect(pool.has(id)).toBe(false);
+    }
   });
 
   it('orders by Sleeper rank, best first', () => {
-    const kickers = [...pool.values()].filter((p) => p.position === 'K');
-    expect(kickers.map((k) => k.sleeperId)).toEqual(['k2', 'k1']);
+    const defenses = [...pool.values()].filter((p) => p.position === 'DEF');
+    expect(defenses.map((d) => d.sleeperId)).toEqual(['def1']);
   });
+
+  it('keeps team defenses, which legitimately have no status or team', () => {
+    expect(pool.has('def1')).toBe(true);
+  });
+
+  it('never shadows a player the backend already valued', () => {
+    const withExisting = buildSupplementalPool(players, detectLeagueFormat(IDP_LEAGUE), new Set(['def1']));
+    expect(withExisting.has('def1')).toBe(false);
+  });
+
+  it('marks every row as rank-sourced, never as a projection', () => {
+    expect([...pool.values()].every((p) => p.valueSource === 'sleeper-rank')).toBe(true);
+  });
+});
+
+// The roster filters live in the shared collector, so they are exercised
+// against the full fallback pool - the one path that still pools kickers and
+// IDP, when the backend is unreachable and there are no projections at all.
+describe('buildFullFallbackPool roster filters', () => {
+  const pool = buildFullFallbackPool(players, detectLeagueFormat(IDP_LEAGUE));
 
   it('drops retired/irrelevant players above the rank ceiling', () => {
     expect(pool.has('retired')).toBe(false);
@@ -81,13 +107,9 @@ describe('buildSupplementalPool', () => {
     expect(pool.has('def1')).toBe(true);
   });
 
-  it('never shadows a player the backend already valued', () => {
-    const withExisting = buildSupplementalPool(players, detectLeagueFormat(IDP_LEAGUE), new Set(['k2']));
-    expect(withExisting.has('k2')).toBe(false);
-  });
-
-  it('marks every row as rank-sourced, never as a projection', () => {
-    expect([...pool.values()].every((p) => p.valueSource === 'sleeper-rank')).toBe(true);
+  it('orders each position by Sleeper rank, best first', () => {
+    const kickers = [...pool.values()].filter((p) => p.position === 'K');
+    expect(kickers.map((k) => k.sleeperId)).toEqual(['k2', 'k1']);
   });
 });
 

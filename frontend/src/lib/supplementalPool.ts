@@ -36,8 +36,20 @@ export interface SupplementalPlayer {
   valueSource: ValueSource;
 }
 
-/** Positions the projection backend can produce a VOR for. Everything else needs the fallback. */
-export const BACKEND_PROJECTED_POSITIONS: ReadonlySet<string> = new Set(['QB', 'RB', 'WR', 'TE']);
+/**
+ * Positions the projection backend can produce a real VOR for.
+ *
+ * K and IDP joined this set once nflverse's kicking and defensive columns
+ * (fg_made by distance, def_tackles_solo, def_sacks, ...) were wired into the
+ * scoring engine - they are projected and put on the same points-above-
+ * replacement scale as everyone else, so they no longer need a rank fallback.
+ *
+ * DEF remains outside it, and structurally so: a team defense is a unit, not
+ * a row in a player-stats table, so there is no per-player line to project.
+ */
+export const BACKEND_PROJECTED_POSITIONS: ReadonlySet<string> = new Set([
+  'QB', 'RB', 'WR', 'TE', 'K', 'DL', 'LB', 'DB',
+]);
 
 /** Sleeper's `search_rank` is ~9999999 for irrelevant/retired players; anything past this is noise. */
 const RANK_CEILING = 20000;

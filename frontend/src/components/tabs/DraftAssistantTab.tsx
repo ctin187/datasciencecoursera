@@ -150,10 +150,11 @@ export function DraftAssistantTab({
         <Card className="notice">
           <p className="text-sm">
             <strong>{pool.unprojectedPositions.join(', ')}</strong>{' '}
-            {pool.unprojectedPositions.length === 1 ? 'has' : 'have'} no projection source — nflverse doesn't publish
-            the inputs the model needs for {pool.unprojectedPositions.length === 1 ? 'it' : 'them'}. Those players are
-            still on the board, ordered by <strong>Sleeper relevance rank</strong> and shown with "—" under VOR so
-            they're never mistaken for a projected value. Filter by position to draft them.
+            {pool.unprojectedPositions.length === 1 ? 'is' : 'are'} scored as a team unit, not per player, so there is
+            no individual stat line to project. Those rows sit on the board ordered by{' '}
+            <strong>Sleeper relevance rank</strong>, with "—" under VOR so they're never mistaken for a projected
+            value. Every other position on this board — including K, DL, LB and DB — carries a real VOR on the same
+            scale.
           </p>
         </Card>
       )}
@@ -193,7 +194,7 @@ export function DraftAssistantTab({
       {available.length > 0 && (
         <Card>
           <CardTitle
-            subtitle={`${available.length} undrafted players across every position your league rosters. VOR-projected players rank first; K/DEF/IDP follow, ordered by Sleeper rank. "Marginal value for you" is computed for the top 40 by VOR only, to keep this fast.`}
+            subtitle={`${available.length} undrafted players across every position your league rosters, ranked on one VOR scale — points per game above this league's own replacement level at each position, so a linebacker and a wide receiver are directly comparable. Team defenses have no per-player stat line and follow, ordered by Sleeper rank. "Marginal value for you" is computed for the top 40, to keep this fast.`}
           >
             Best Available
           </CardTitle>

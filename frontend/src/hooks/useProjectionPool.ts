@@ -43,7 +43,7 @@ export interface ProjectionPoolState {
   backendConfigured: boolean;
   asOfWeek: number | null;
   gamesRemaining: number | null;
-  /** Rostered positions the backend cannot project (K/DEF/IDP), so the UI can say so. */
+  /** Rostered positions the backend cannot project (team defense), so the UI can say so. */
   unprojectedPositions: string[];
   /** True when NOTHING came from the backend and the whole pool is Sleeper-rank ordered. */
   fullFallback: boolean;
@@ -152,9 +152,9 @@ export function useProjectionPool(
             sleeperRank: null,
           });
         }
-        // Add K/DEF/IDP from Sleeper rank. Without this, a league that starts
-        // those positions gets a draft board that silently omits roster spots
-        // it is required to fill.
+        // Supplement whatever the backend still cannot value - team defenses,
+        // and any position a future league starts that has no projection. K and
+        // IDP no longer come through here: they arrive with a real VOR.
         setBySleeperId(players && format ? supplement(map, players, format, false) : map);
         setFullFallback(false);
         setReplacementLevels(replRes.replacement_levels);
