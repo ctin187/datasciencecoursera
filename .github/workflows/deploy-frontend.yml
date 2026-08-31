@@ -54,13 +54,42 @@ jobs:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://fantasy-dynasty-backend.onrender.com' }}
         run: npm run build
 
-      - name: Report backend wiring
+      # Does the backend this build just baked in actually exist? Answering that
+      # at deploy time beats finding out from a "could not reach the backend"
+      # toast in the browser. Never fails the deploy: the frontend degrades to
+      # Sleeper-rank ordering without a backend, so a dead API is a warning,
+      # not a broken site.
+      - name: Probe the backend
+        env:
+          BACKEND: ${{ vars.VITE_API_BASE_URL || 'https://fantasy-dynasty-backend.onrender.com' }}
+          FROM_VAR: ${{ vars.VITE_API_BASE_URL }}
         run: |
-          if [ -z "${{ vars.VITE_API_BASE_URL }}" ]; then
-            echo "Built against the default backend: https://fantasy-dynasty-backend.onrender.com"
-            echo "::notice::Using the committed default backend URL. Set a VITE_API_BASE_URL repository variable to override it."
+          if [ -n "$FROM_VAR" ]; then
+            echo "Backend URL came from the VITE_API_BASE_URL repo variable."
           else
-            echo "Built against backend from repo variable: ${{ vars.VITE_API_BASE_URL }}"
+            echo "Backend URL is the committed default (no VITE_API_BASE_URL repo variable set)."
+          fi
+          echo "Probing $BACKEND/health ..."
+
+          # Render free tiers cold-start, so allow a slow first response and
+          # retry before concluding the service is not there.
+          code=000
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' \
+                     --max-time 90 "$BACKEND/health" || echo 000)
+            [ "$code" = "200" ] && break
+            echo "  attempt $attempt: HTTP $code"
+            sleep 10
+          done
+
+          if [ "$code" = "200" ]; then
+            echo "::notice::Backend is live at $BACKEND"
+            cat /tmp/health.json
+          elif [ "$code" = "000" ]; then
+            echo "::warning::No backend answered at $BACKEND (DNS/connection failed - the service likely does not exist). The site still works: VOR columns fall back to Sleeper relevance rank. Deploy /backend via the root render.yaml Blueprint, then set the VITE_API_BASE_URL repo variable to its URL."
+          else
+            echo "::warning::Backend at $BACKEND answered HTTP $code, not 200. The site still works: VOR columns fall back to Sleeper relevance rank."
+            cat /tmp/health.json || true
           fi
 
       - uses: actions/configure-pages@v5
