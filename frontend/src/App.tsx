@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLeagueData } from './hooks/useLeagueData';
 import { useSeasonSimulation } from './hooks/useSeasonSimulation';
 import { useRosterHealth } from './hooks/useRosterHealth';
@@ -16,6 +16,7 @@ import { LeagueDnaTab } from './components/tabs/LeagueDnaTab';
 import { EdgeEngineTab } from './components/tabs/EdgeEngineTab';
 import { FranchiseHistoryTab } from './components/tabs/FranchiseHistoryTab';
 import { useLeagueHistory } from './hooks/useLeagueHistory';
+import { onBackendWaking } from './services/backendApi';
 
 // Four tabs. This app targets both redraft and dynasty/keeper Sleeper
 // leagues - League Overview auto-detects which one you're in (and every
@@ -46,6 +47,12 @@ export default function App() {
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>('');
   const [tab, setTab] = useState<TabId>('league');
+  const [backendWaking, setBackendWaking] = useState(false);
+
+  // The analytics backend runs on a free tier that sleeps. Waking it takes
+  // roughly half a minute, and the client retries through that silently - so
+  // say what the wait is for rather than leaving an unexplained spinner.
+  useEffect(() => onBackendWaking(setBackendWaking), []);
 
   const { data, loading, error, progress } = useLeagueData(activeLeagueId);
   const seasonSim = useSeasonSimulation(activeLeagueId, data?.league, data?.rosters, data?.users);
@@ -166,6 +173,13 @@ export default function App() {
 
         {data && (
           <>
+            {backendWaking && (
+              <div className="notice mb-3">
+                <span className="font-semibold">Waking the analytics backend…</span> It sleeps after inactivity
+                on its free tier and takes about a minute to come back with data. Everything sourced from
+                Sleeper is already loaded below.
+              </div>
+            )}
             {data.stale && (
               <div className="notice mb-3">
                 <span className="font-semibold">Showing cached data</span> — the last live refresh failed, so some

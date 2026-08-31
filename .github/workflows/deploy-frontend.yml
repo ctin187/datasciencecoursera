@@ -83,8 +83,25 @@ jobs:
           done
 
           if [ "$code" = "200" ]; then
-            echo "::notice::Backend is live at $BACKEND"
-            cat /tmp/health.json
+            echo "Health check OK:"
+            cat /tmp/health.json; echo
+
+            # /health returns 200 as soon as the process is up, which says
+            # nothing about whether the nflverse ingest has finished. Ask a
+            # real data endpoint - that is what decides whether the app shows
+            # VOR or falls back to Sleeper rank.
+            dcode=$(curl -sS -o /tmp/proj.json -w '%{http_code}' --max-time 120 \
+                      --get --data-urlencode 'scoring={"rec":1}' --data 'limit=1' \
+                      "$BACKEND/projections" || echo 000)
+            if [ "$dcode" = "200" ]; then
+              echo "::notice::Backend is live at $BACKEND and serving projections."
+            elif [ "$dcode" = "503" ]; then
+              echo "::warning::Backend is up at $BACKEND but still ingesting nflverse data (503 on /projections). It should be serving within a minute; the app retries through this and shows a waking notice."
+              cat /tmp/proj.json || true
+            else
+              echo "::warning::Backend is up at $BACKEND but /projections returned HTTP $dcode."
+              cat /tmp/proj.json || true
+            fi
           elif [ "$code" = "000" ]; then
             echo "::warning::No backend answered at $BACKEND (DNS/connection failed - the service likely does not exist). The site still works: VOR columns fall back to Sleeper relevance rank. Deploy /backend via the root render.yaml Blueprint, then set the VITE_API_BASE_URL repo variable to its URL."
           else
