@@ -101,11 +101,19 @@ The Draft Assistant is the exception: without a backend it still shows a full bo
 `—`. The same path covers K, DEF and IDP even when the backend *is* up, because nflverse doesn't publish the
 inputs the projection model needs for those positions.
 
-To deploy the backend: render.com → New + → Blueprint → connect this repo. Render reads the root `render.yaml`
-and fills in everything; pick the free plan and click Apply. Then set a repository *variable* (not a secret)
-named `VITE_API_BASE_URL` to the service's URL under Settings → Secrets and variables → Actions → Variables,
-and re-run the deploy workflow. Each deploy probes `/health` and reports in the run log whether the backend it
-baked in actually answered.
+#### Cold starts
+
+The deployed backend runs on Render's free tier, which sleeps after inactivity. The first request after a
+sleep takes roughly 30 seconds to wake the instance, and the data endpoints then return 503 for another
+minute while the nflverse ingest runs. Both stages look like a dead service from a browser — the wake-up
+holding response carries no CORS headers, so `fetch` rejects outright — so the client retries through them
+(an ~80s budget, see `services/backendApi.ts`) and the app shows a "waking the analytics backend" notice
+instead of an error. Sleeper-sourced tabs are unaffected and load immediately.
+
+To point at a different backend, deploy `/backend` (render.com → New + → Blueprint → connect this repo; Render
+reads the root `render.yaml`, so pick the free plan and click Apply) and set a repository *variable* named
+`VITE_API_BASE_URL` under Settings → Secrets and variables → Actions → Variables. Each deploy probes `/health`
+and records in the run log whether the backend it baked in actually answered.
 
 ## Architecture
 
