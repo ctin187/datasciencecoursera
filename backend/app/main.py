@@ -552,8 +552,15 @@ def roster_health(req: RosterHealthRequest) -> dict:
                 "sleeper_id": sid, "gsis_id": gsis,
                 "name": meta.get("name"), "position": meta.get("position"),
                 "has_projection": False,
-                "reason": ("no nflverse ID match" if not gsis
-                           else "matched, but no projection (no regular-season snaps in this window)"),
+                "reason": (
+                    # A team defense is a unit, not a row in a player-stats
+                    # table, so it has no nflverse player id by construction -
+                    # say that rather than reporting a failed ID match.
+                    "team defense - scored as a unit, not projected per-player"
+                    if (meta.get("position") or "").upper() == "DEF"
+                    else "no nflverse ID match" if not gsis
+                    else "matched, but no projection (no regular-season snaps in this window)"
+                ),
                 "projected_points_per_game": None, "vor_per_game": None, "vor_rest_of_season": None,
             }
         d = v.to_dict()

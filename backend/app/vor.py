@@ -29,7 +29,11 @@ FLEX_ELIGIBILITY: dict[str, tuple[str, ...]] = {
     "IDP_FLEX": ("DL", "LB", "DB"),
 }
 
-SCORABLE = ("QB", "RB", "WR", "TE")
+# Positions the projection model can put a real points number on. K and IDP
+# joined this list once nflverse's defensive and kicking columns were wired
+# into the scoring engine; DEF stays out because a team defense is a unit, not
+# a row in a player-stats table.
+SCORABLE = ("QB", "RB", "WR", "TE", "K", "DL", "LB", "DB")
 
 
 @dataclass
@@ -73,7 +77,7 @@ def parse_lineup(roster_positions: list[str]) -> tuple[dict[str, int], dict[str,
             continue
         if slot in FLEX_ELIGIBILITY:
             flex[slot] = flex.get(slot, 0) + 1
-        elif slot in SCORABLE or slot in ("K", "DEF", "DL", "LB", "DB"):
+        elif slot in SCORABLE or slot == "DEF":
             dedicated[slot] = dedicated.get(slot, 0) + 1
     return dedicated, flex
 

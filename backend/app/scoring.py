@@ -48,6 +48,57 @@ LINEAR_MAP: dict[str, str] = {
     "pr_td": "pt_return_tds",
 }
 
+# --- Individual defensive players (IDP) ---------------------------------
+# Sleeper namespaces these `idp_*`. Note the distinction from team-defense
+# scoring, which uses the BARE names (`sack`, `int`, `ff`, `fum_rec`, `safe`,
+# `blk_kick`): those score a whole DST unit and stay out of scope here, because
+# a team defense is not a row in a player-stats table.
+IDP_MAP: dict[str, str] = {
+    "idp_tkl_solo": "def_tackles_solo",
+    "idp_tkl_ast": "def_tackle_assists",
+    "idp_tkl_loss": "def_tackles_for_loss",
+    "idp_sack": "def_sacks",
+    "idp_sack_yd": "def_sack_yards",
+    "idp_qb_hit": "def_qb_hits",
+    "idp_int": "def_interceptions",
+    "idp_int_ret_yd": "def_interception_yards",
+    "idp_ff": "def_fumbles_forced",
+    "idp_pass_def": "def_pass_defended",
+    "idp_safe": "def_safeties",
+    "idp_def_td": "def_tds",
+    "idp_td": "def_tds",
+}
+
+# --- Kickers ------------------------------------------------------------
+# nflverse buckets made/missed field goals by distance, which is exactly the
+# granularity Sleeper's distance-tiered scoring needs.
+KICKING_MAP: dict[str, str] = {
+    "fgm": "fg_made",
+    "fga": "fg_att",
+    "fgmiss": "fg_missed",
+    "fgm_0_19": "fg_made_0_19",
+    "fgm_20_29": "fg_made_20_29",
+    "fgm_30_39": "fg_made_30_39",
+    "fgm_40_49": "fg_made_40_49",
+    "fgmiss_0_19": "fg_missed_0_19",
+    "fgmiss_20_29": "fg_missed_20_29",
+    "fgmiss_30_39": "fg_missed_30_39",
+    "fgmiss_40_49": "fg_missed_40_49",
+    "xpm": "pat_made",
+    "xpa": "pat_att",
+    "xpmiss": "pat_missed",
+}
+
+# Keys that sum several nflverse columns: key -> columns to add together.
+SUM_MAP: dict[str, tuple[str, ...]] = {
+    # Sleeper's "total tackles" is solo + assisted.
+    "idp_tkl": ("def_tackles_solo", "def_tackle_assists"),
+    # Sleeper tiers 50+ as one bucket; nflverse splits 50-59 and 60+.
+    "fgm_50p": ("fg_made_50_59", "fg_made_60_"),
+    "fgmiss_50p": ("fg_missed_50_59", "fg_missed_60_"),
+    "idp_blk_kick": ("def_fg_blocks", "def_pat_blocks", "def_punt_blocks"),
+}
+
 # Per-game yardage milestones: key -> (stat column(s), threshold).
 THRESHOLD_BONUSES: dict[str, tuple[tuple[str, ...], float]] = {
     "bonus_pass_yd_300": (("passing_yards",), 300),
@@ -83,10 +134,14 @@ KNOWN_UNSUPPORTED: dict[str, str] = {
 # Scoring keys that belong to team defense / kicker / IDP scoring. This module
 # scores offensive skill players only, so these are expected to be present in
 # a league's settings and are not evidence of a mapping gap.
+# Team-defense (DST) scoring only. A DST is a unit, not a row in a player
+# stats table, so these stay out of scope. Sleeper spells team-defense keys
+# WITHOUT the `idp_` prefix - bare `sack`, `int`, `ff` are the DST versions of
+# stats whose individual counterparts are `idp_sack`, `idp_int`, `idp_ff`.
 _OUT_OF_SCOPE_PREFIXES = (
-    "def_", "idp_", "dst_", "st_ff", "st_fum_rec", "st_tkl", "sack", "int_ret",
-    "blk_", "safe", "pts_allow", "yds_allow", "fgm", "fga", "xpm", "xpa", "fgmiss",
-    "kick", "punt", "tkl", "ff", "fum_rec", "int", "td",
+    "def_st_", "dst_", "st_ff", "st_fum_rec", "st_tkl", "sack", "int_ret",
+    "blk_", "safe", "pts_allow", "yds_allow",
+    "kick", "punt", "tkl", "ff", "fum_rec", "int", "td", "def_td", "def_2pt",
 )
 
 
@@ -111,6 +166,10 @@ _OUT_OF_SCOPE_PREFIXES = (
 # ---------------------------------------------------------------------------
 OFFENSIVE_FUMBLE_COLS = ("rushing_fumbles_lost", "receiving_fumbles_lost", "sack_fumbles_lost")
 OFFENSIVE_FUMBLE_ALL_COLS = ("rushing_fumbles", "receiving_fumbles", "sack_fumbles")
+
+
+# Every straight-multiplication key in one lookup.
+_ALL_LINEAR: dict[str, str] = {**LINEAR_MAP, **IDP_MAP, **KICKING_MAP}
 
 
 @dataclass
@@ -141,7 +200,7 @@ def analyze_settings(scoring_settings: dict) -> dict:
     for key, value in (scoring_settings or {}).items():
         if not value:
             continue  # zero-weighted keys can't change any total
-        if key in LINEAR_MAP or key in THRESHOLD_BONUSES or key in POSITION_REC_BONUSES:
+        if key in _ALL_LINEAR or key in SUM_MAP or key in THRESHOLD_BONUSES or key in POSITION_REC_BONUSES:
             supported.append(key)
         elif key == "pass_inc":
             supported.append(key)
@@ -188,8 +247,16 @@ def score_stat_line(
                 breakdown[key] = round(contrib, 4)
             continue
 
-        if key in LINEAR_MAP:
-            val = _num(stats, LINEAR_MAP[key])
+        if key in SUM_MAP:
+            val = sum(_num(stats, c) for c in SUM_MAP[key])
+            if val:
+                contrib = val * float(weight)
+                pts += contrib
+                breakdown[key] = round(contrib, 4)
+            continue
+
+        if key in _ALL_LINEAR:
+            val = _num(stats, _ALL_LINEAR[key])
             if val:
                 contrib = val * float(weight)
                 pts += contrib
