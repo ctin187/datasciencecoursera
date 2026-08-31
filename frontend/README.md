@@ -90,9 +90,22 @@ Open the app, paste a Sleeper League ID (the long number in your league's URL, e
 `sleeper.com/leagues/918876425783136256/team`), and pick your team from the dropdown once it loads to see
 roster-specific analysis. Works for both redraft and dynasty/keeper leagues.
 
-Roster Value, Draft Assistant, Trade Analyzer, and Waiver Wire need the companion Python backend (`/backend`)
-— set `VITE_API_BASE_URL` (see `.env.example`) to a running instance, or they'll say the backend isn't
-configured rather than guessing.
+### The analytics backend
+
+Roster Value, Trade Analyzer and Waiver Wire need the companion Python backend (`/backend`) for projections
+and VOR — set `VITE_API_BASE_URL` (see `.env.example`) to a running instance, or they'll say the backend
+isn't configured rather than guessing.
+
+The Draft Assistant is the exception: without a backend it still shows a full board, ordered by Sleeper's own
+`search_rank`. That's a relevance ordinal, not a projection, so it's labelled as such and the VOR column reads
+`—`. The same path covers K, DEF and IDP even when the backend *is* up, because nflverse doesn't publish the
+inputs the projection model needs for those positions.
+
+To deploy the backend: render.com → New + → Blueprint → connect this repo. Render reads the root `render.yaml`
+and fills in everything; pick the free plan and click Apply. Then set a repository *variable* (not a secret)
+named `VITE_API_BASE_URL` to the service's URL under Settings → Secrets and variables → Actions → Variables,
+and re-run the deploy workflow. Each deploy probes `/health` and reports in the run log whether the backend it
+baked in actually answered.
 
 ## Architecture
 

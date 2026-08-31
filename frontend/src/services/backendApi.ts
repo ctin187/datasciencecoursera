@@ -162,34 +162,126 @@ export class BackendError extends Error {
   }
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+// ---------------------------------------------------------------------------
+// Cold starts
+//
+// The backend runs on a free Render instance, which sleeps after inactivity
+// and takes ~30s to wake, then another minute to ingest nflverse data before
+// the data endpoints answer. From a browser both stages look like failure:
+// Render's holding response during wake-up carries no CORS headers, so the
+// fetch rejects outright rather than returning a status, and once the process
+// is up the data endpoints return 503 until the first refresh lands.
+//
+// Neither is a real error, so retry through both rather than reporting the
+// service as unreachable. Every endpoint here is a pure read - the POST
+// bodies describe a computation, they don't mutate anything - so replaying a
+// request is safe.
+// ---------------------------------------------------------------------------
+
+/** Backoff schedule, ~79s total: covers wake-up plus part of the first ingest. */
+let retryDelaysMs = [2000, 4000, 8000, 15000, 20000, 30000];
+
+/** Test seam: shrink the schedule so retry behaviour is testable in ms. */
+export function __setRetryDelaysForTests(delays: number[]): void {
+  retryDelaysMs = delays;
+}
+
+type WakeListener = (waking: boolean) => void;
+const wakeListeners = new Set<WakeListener>();
+let waking = false;
+
+/**
+ * Notifies when the client is sitting in a retry loop, so the UI can say
+ * "waking the backend" instead of leaving a spinner unexplained.
+ */
+export function onBackendWaking(fn: WakeListener): () => void {
+  wakeListeners.add(fn);
+  fn(waking);
+  return () => wakeListeners.delete(fn);
+}
+
+function setWaking(v: boolean): void {
+  if (waking === v) return;
+  waking = v;
+  for (const fn of wakeListeners) fn(v);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 502/503/504 are Render waking or the cache still filling; 429 is throttling. */
+const isRetryableStatus = (s: number) => s === 502 || s === 503 || s === 504 || s === 429;
+
+async function readDetail(res: Response): Promise<string> {
+  try {
+    const j = await res.json();
+    if (typeof j.detail === 'string') return j.detail;
+    // The cache-not-ready 503 sends a structured detail; pull out its hint
+    // rather than dumping JSON at the user.
+    if (j.detail && typeof j.detail === 'object') {
+      const d = j.detail as { error?: string; hint?: string };
+      return [d.error, d.hint].filter(Boolean).join(' — ') || JSON.stringify(j.detail);
+    }
+    return JSON.stringify(j.detail ?? j);
+  } catch {
+    return `HTTP ${res.status}`;
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!isBackendConfigured()) {
     throw new BackendError('Backend not configured (VITE_API_BASE_URL is unset).');
   }
-  console.debug('[backendApi] POST', path);
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    throw new BackendError(
-      `Could not reach the backend at ${API_BASE_URL}. It may be asleep (free tiers idle out) or the URL may be wrong.`,
-    );
-  }
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const j = await res.json();
-      detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail ?? j);
-    } catch {
-      /* keep the status-code message */
+
+  let lastError: BackendError | null = null;
+
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+    if (attempt > 0) {
+      setWaking(true);
+      await sleep(retryDelaysMs[attempt - 1]);
     }
-    throw new BackendError(detail, res.status);
+
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE_URL}${path}`, init);
+    } catch {
+      // Network-level rejection. During a Render cold start this is what a
+      // CORS-header-less holding response looks like, so keep retrying.
+      lastError = new BackendError(
+        `Could not reach the backend at ${API_BASE_URL} after retrying for about 80 seconds. ` +
+          `Its free tier sleeps after inactivity — reload in a minute and it should be awake.`,
+      );
+      continue;
+    }
+
+    if (res.ok) {
+      setWaking(false);
+      return (await res.json()) as T;
+    }
+
+    const detail = await readDetail(res);
+    lastError = new BackendError(
+      res.status === 503
+        ? `The backend is awake but still loading its data (${detail}). This finishes about a minute after it wakes.`
+        : detail,
+      res.status,
+    );
+    if (!isRetryableStatus(res.status)) break;
   }
-  return (await res.json()) as T;
+
+  setWaking(false);
+  throw lastError ?? new BackendError('Unknown backend error.');
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function get<T>(path: string): Promise<T> {
+  return request<T>(path);
 }
 
 export async function fetchRosterHealth(req: RosterHealthRequest): Promise<RosterHealthResponse> {
@@ -233,29 +325,6 @@ export interface ProjectionsResponse {
   scoring_analysis: ScoringAnalysis;
   count: number;
   players: ProjectedPlayer[];
-}
-
-async function get<T>(path: string): Promise<T> {
-  if (!isBackendConfigured()) {
-    throw new BackendError('Backend not configured (VITE_API_BASE_URL is unset).');
-  }
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE_URL}${path}`);
-  } catch {
-    throw new BackendError(`Could not reach the backend at ${API_BASE_URL}. It may be asleep (free tiers idle out) or the URL may be wrong.`);
-  }
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const j = await res.json();
-      detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail ?? j);
-    } catch {
-      /* keep the status-code message */
-    }
-    throw new BackendError(detail, res.status);
-  }
-  return (await res.json()) as T;
 }
 
 export async function fetchProjections(params: { scoringSettings: Record<string, number>; limit?: number }): Promise<ProjectionsResponse> {
