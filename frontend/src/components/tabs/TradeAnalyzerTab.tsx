@@ -5,7 +5,6 @@ import type { SeasonSimulationState } from '../../hooks/useSeasonSimulation';
 import { evaluateTrade, type TradeImpact, type TradePlayerInfo } from '../../lib/tradeSimulator';
 import { explainTrade } from '../../lib/explain';
 import { Card, CardTitle } from '../ui/Card';
-import { Mascot } from '../ui/Mascot';
 import { Meter, type MeterTone } from '../ui/Meter';
 
 function pct(x: number): string {
@@ -112,15 +111,12 @@ export function TradeAnalyzerTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card>
-        <div className="mb-3 flex items-center gap-3">
-          <Mascot state="trade" size={48} className="hidden shrink-0 sm:block" />
-          <CardTitle subtitle="Pick both teams, check the players moving each direction, then evaluate. Picks aren't valued yet — players only.">
-            Trade Center
-          </CardTitle>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <CardTitle subtitle="Pick both teams, check the players moving each direction, then evaluate. Picks aren't valued yet — players only.">
+          Trade Center
+        </CardTitle>
+        <div className="grid gap-2 sm:grid-cols-2">
           {([
             { label: 'Team A sends', rosterId: rosterAId, setRosterId: setRosterAId, roster: rosterA, out: outA, setOut: setOutA, other: rosterBId },
             { label: 'Team B sends', rosterId: rosterBId, setRosterId: setRosterBId, roster: rosterB, out: outB, setOut: setOutB, other: rosterAId },
@@ -129,7 +125,7 @@ export function TradeAnalyzerTab({
               <select
                 value={side.rosterId ?? ''}
                 onChange={(e) => side.setRosterId(Number(e.target.value))}
-                className="w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2"
+                className="w-full border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 outline-none ring-violet-500/50 focus:ring-2"
               >
                 {teamOptions.map((t) => (
                   <option key={t.rosterId} value={t.rosterId} disabled={t.rosterId === side.other}>
@@ -138,9 +134,9 @@ export function TradeAnalyzerTab({
                 ))}
               </select>
               <p className="text-xs text-slate-500">{side.label}:</p>
-              <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-slate-800 p-2">
+              <div className="max-h-64 space-y-1 overflow-y-auto border border-slate-800 p-2">
                 {(side.roster?.players ?? []).map((id) => (
-                  <label key={id} className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-800/50">
+                  <label key={id} className="flex items-center gap-2 px-1.5 py-1 text-sm hover:bg-slate-800/50">
                     <input type="checkbox" checked={side.out.has(id)} onChange={() => toggle(side.out, side.setOut, id)} />
                     <span className="text-slate-200">{playerLabel(id)}</span>
                   </label>
@@ -153,9 +149,9 @@ export function TradeAnalyzerTab({
         <button
           onClick={runEvaluation}
           disabled={!canEvaluate || computing}
-          className="mt-4 min-h-[44px] rounded border-2 border-violet-400/60 bg-violet-600 px-4 py-2.5 font-display text-[10px] tracking-wide text-slate-950 uppercase transition-transform hover:bg-violet-500 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-primary mt-3 min-h-[30px] px-4"
         >
-          {computing ? <span className="terminal-cursor">Simulating</span> : 'Evaluate Trade'}
+          {computing ? "Simulating…" : "Evaluate Trade"}
         </button>
       </Card>
 
@@ -163,14 +159,14 @@ export function TradeAnalyzerTab({
         <>
           <Card>
             <CardTitle>Roster Value Impact</CardTitle>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {[
                 { side: impact.sideA },
                 { side: impact.sideB },
               ].map(({ side }, i) => {
                 const tone: MeterTone = side.vorDelta > 0.05 ? 'positive' : side.vorDelta < -0.05 ? 'negative' : 'neutral';
                 return (
-                  <div key={i} className="rounded border border-slate-800 bg-slate-950/40 p-3">
+                  <div key={i} className="border border-slate-800 bg-slate-950/40 p-3">
                     <div className="font-mono text-xs font-semibold tracking-wide text-slate-300 uppercase">{side.teamName}</div>
                     <div className="mt-2">
                       <Meter
@@ -191,9 +187,9 @@ export function TradeAnalyzerTab({
               <CardTitle subtitle="Re-runs the same Monte Carlo season simulator used in Season Outlook, with each team's modeled weekly score shifted by the VOR delta above.">
                 Championship Probability Impact
               </CardTitle>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {impact.probabilityImpactA && (
-                  <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="border border-slate-800 bg-slate-950/40 p-3">
                     <div className="font-mono text-xs font-semibold tracking-wide text-slate-300 uppercase">{impact.sideA.teamName}</div>
                     <div className="mt-2 space-y-2">
                       <Meter
@@ -212,7 +208,7 @@ export function TradeAnalyzerTab({
                   </div>
                 )}
                 {impact.probabilityImpactB && (
-                  <div className="rounded border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="border border-slate-800 bg-slate-950/40 p-3">
                     <div className="font-mono text-xs font-semibold tracking-wide text-slate-300 uppercase">{impact.sideB.teamName}</div>
                     <div className="mt-2 space-y-2">
                       <Meter

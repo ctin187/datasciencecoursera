@@ -6,7 +6,14 @@ import {
   BackendError,
   type ReplacementLevel,
 } from '../services/backendApi';
-import type { SleeperLeague } from '../types';
+import type { PlayersMap, SleeperLeague } from '../types';
+import { detectLeagueFormat } from '../lib/leagueFormat';
+import {
+  buildSupplementalPool,
+  buildFullFallbackPool,
+  unprojectedPositions,
+  type ValueSource,
+} from '../lib/supplementalPool';
 
 export interface PooledPlayer {
   sleeperId: string;
@@ -17,6 +24,15 @@ export interface PooledPlayer {
   projectedPointsPerGame: number;
   vorPerGame: number | null;
   restOfSeasonPoints: number;
+  /**
+   * How this player's ordering was derived. 'backend-vor' is a real projection
+   * minus this league's replacement level. 'sleeper-rank' is Sleeper's own
+   * relevance ordinal, used for positions the backend cannot project (K, DEF,
+   * IDP) - it is NOT a projection and must never be rendered as one.
+   */
+  valueSource: ValueSource;
+  /** Sleeper relevance ordinal, lower = more notable. Only set for 'sleeper-rank' rows. */
+  sleeperRank: number | null;
 }
 
 export interface ProjectionPoolState {
@@ -27,6 +43,10 @@ export interface ProjectionPoolState {
   backendConfigured: boolean;
   asOfWeek: number | null;
   gamesRemaining: number | null;
+  /** Rostered positions the backend cannot project (K/DEF/IDP), so the UI can say so. */
+  unprojectedPositions: string[];
+  /** True when NOTHING came from the backend and the whole pool is Sleeper-rank ordered. */
+  fullFallback: boolean;
 }
 
 /**
@@ -37,22 +57,66 @@ export interface ProjectionPoolState {
  * has rostered yet - the Draft Assistant board, and retrospective "was this
  * pick good" analysis.
  */
-export function useProjectionPool(league: SleeperLeague | undefined): ProjectionPoolState {
+export function useProjectionPool(
+  league: SleeperLeague | undefined,
+  players?: PlayersMap,
+): ProjectionPoolState {
   const [bySleeperId, setBySleeperId] = useState<Map<string, PooledPlayer>>(new Map());
   const [replacementLevels, setReplacementLevels] = useState<Record<string, ReplacementLevel> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [asOfWeek, setAsOfWeek] = useState<number | null>(null);
   const [gamesRemaining, setGamesRemaining] = useState<number | null>(null);
+  const [fullFallback, setFullFallback] = useState(false);
+
+  const format = league ? detectLeagueFormat(league.roster_positions) : null;
+  const unprojected = format ? unprojectedPositions(format) : [];
+
+  /** Sleeper-rank rows for positions the backend can't value. Never overwrites a real projection. */
+  function supplement(
+    base: Map<string, PooledPlayer>,
+    playersMap: PlayersMap,
+    fmt: NonNullable<typeof format>,
+    everything: boolean,
+  ): Map<string, PooledPlayer> {
+    const extra = everything
+      ? buildFullFallbackPool(playersMap, fmt)
+      : buildSupplementalPool(playersMap, fmt, new Set(base.keys()));
+    const merged = new Map(base);
+    for (const [id, s] of extra) {
+      if (merged.has(id)) continue;
+      merged.set(id, {
+        sleeperId: s.sleeperId,
+        gsisId: '',
+        name: s.name,
+        position: s.position,
+        team: s.team,
+        projectedPointsPerGame: 0,
+        vorPerGame: null, // deliberately null - there is no projection to derive one from
+        restOfSeasonPoints: 0,
+        valueSource: s.valueSource,
+        sleeperRank: s.sleeperRank,
+      });
+    }
+    return merged;
+  }
 
   useEffect(() => {
     if (!league) {
       setBySleeperId(new Map());
       setReplacementLevels(null);
+      setFullFallback(false);
       return;
     }
+    // No backend at all: still give the draft board something real to work
+    // with, ordered by Sleeper's own relevance rank across every rostered
+    // position, rather than rendering an empty tab.
     if (!isBackendConfigured()) {
       setError(null);
+      if (players && format) {
+        setBySleeperId(supplement(new Map(), players, format, true));
+        setFullFallback(true);
+      }
       return;
     }
     let cancelled = false;
@@ -84,14 +148,27 @@ export function useProjectionPool(league: SleeperLeague | undefined): Projection
             projectedPointsPerGame: p.projected_points_per_game,
             vorPerGame: repl ? p.projected_points_per_game - repl.replacement_points : null,
             restOfSeasonPoints: p.rest_of_season_points,
+            valueSource: 'backend-vor',
+            sleeperRank: null,
           });
         }
-        setBySleeperId(map);
+        // Add K/DEF/IDP from Sleeper rank. Without this, a league that starts
+        // those positions gets a draft board that silently omits roster spots
+        // it is required to fill.
+        setBySleeperId(players && format ? supplement(map, players, format, false) : map);
+        setFullFallback(false);
         setReplacementLevels(replRes.replacement_levels);
         setAsOfWeek(projRes.as_of_week);
         setGamesRemaining(projRes.games_remaining);
       } catch (err) {
-        if (!cancelled) setError(err instanceof BackendError ? err.message : 'Could not load the player projection pool.');
+        if (cancelled) return;
+        setError(err instanceof BackendError ? err.message : 'Could not load the player projection pool.');
+        // Backend failed mid-flight - fall back to a rank-ordered board rather
+        // than leaving the draft tab empty.
+        if (players && format) {
+          setBySleeperId(supplement(new Map(), players, format, true));
+          setFullFallback(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -104,5 +181,15 @@ export function useProjectionPool(league: SleeperLeague | undefined): Projection
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [league?.league_id, league?.season, JSON.stringify(league?.scoring_settings), league?.roster_positions.join(','), league?.total_rosters]);
 
-  return { bySleeperId, replacementLevels, loading, error, backendConfigured: isBackendConfigured(), asOfWeek, gamesRemaining };
+  return {
+    bySleeperId,
+    replacementLevels,
+    loading,
+    error,
+    backendConfigured: isBackendConfigured(),
+    asOfWeek,
+    gamesRemaining,
+    unprojectedPositions: unprojected,
+    fullFallback,
+  };
 }

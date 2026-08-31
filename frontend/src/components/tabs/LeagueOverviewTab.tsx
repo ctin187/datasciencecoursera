@@ -72,7 +72,7 @@ export function LeagueOverviewTab({ data, userId }: { data: LeagueData; userId: 
   const myRoster = userId ? rosters.find((r) => r.owner_id === userId) : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Card>
         <CardTitle>League Configuration (auto-detected from Sleeper)</CardTitle>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
@@ -105,7 +105,7 @@ export function LeagueOverviewTab({ data, userId }: { data: LeagueData; userId: 
           {config.format.usesIDP && <StatTile label="IDP" value={[...config.format.idpPositions].join('/')} />}
           {config.format.usesKicker && <StatTile label="Kicker" value="Yes" />}
         </div>
-        <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+        <div className="mt-4 border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
           <p className="mb-1 font-semibold text-slate-400">How the league type & waiver system were determined:</p>
           <ul className="space-y-0.5">
             {config.leagueTypeSignals.map((s, i) => (
