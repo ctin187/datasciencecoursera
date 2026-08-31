@@ -78,6 +78,30 @@ const proj = await page.evaluate(async (base) => {
 check(proj.ok && proj.count > 0, 'backend serves real projections', `status ${proj.status}, ${proj.count} rows`);
 if (proj.sample) console.log('      sample:', JSON.stringify(proj.sample).slice(0, 220));
 
+// Every position the board ranks on one VOR scale must actually come back
+// projected. If K or IDP silently drop out of the projection set, the board
+// quietly reverts to two incomparable currencies - which is exactly the bug
+// this check exists to catch, and it would not show up as an error anywhere.
+const coverage = await page.evaluate(async (base) => {
+  const q = new URLSearchParams({
+    scoring: JSON.stringify({ rec: 1, idp_tkl_solo: 1.5, idp_sack: 4, fgm: 3, xpm: 1 }),
+    limit: '2000',
+  });
+  try {
+    const r = await fetch(`${base}/projections?${q}`);
+    const j = await r.json();
+    const counts = {};
+    for (const p of j?.players ?? []) counts[p.position ?? '?'] = (counts[p.position ?? '?'] ?? 0) + 1;
+    return { ok: r.ok, counts };
+  } catch (e) {
+    return { ok: false, counts: {}, error: String(e) };
+  }
+}, BACKEND);
+const REQUIRED = ['QB', 'RB', 'WR', 'TE', 'K', 'DL', 'LB', 'DB'];
+const missing = REQUIRED.filter((p) => !(coverage.counts[p] > 0));
+check(missing.length === 0, 'every scorable position is projected',
+  missing.length ? `missing: ${missing.join(', ')}` : JSON.stringify(coverage.counts));
+
 // --- a real league, if one was supplied -----------------------------------
 if (LEAGUE_ID) {
   await page.getByPlaceholder('918876425783136256').fill(LEAGUE_ID);
