@@ -83,9 +83,19 @@ if (proj.sample) console.log('      sample:', JSON.stringify(proj.sample).slice(
 // quietly reverts to two incomparable currencies - which is exactly the bug
 // this check exists to catch, and it would not show up as an error anywhere.
 const coverage = await page.evaluate(async (base) => {
+  // Score every position this asks about. An earlier version omitted passing,
+  // so quarterbacks projected at ~0, fell outside the limit, and the check
+  // reported QB missing when the backend was fine - the test's own blind spot,
+  // not a coverage gap.
   const q = new URLSearchParams({
-    scoring: JSON.stringify({ rec: 1, idp_tkl_solo: 1.5, idp_sack: 4, fgm: 3, xpm: 1 }),
-    limit: '400',
+    scoring: JSON.stringify({
+      pass_yd: 0.04, pass_td: 4, pass_int: -2,
+      rush_yd: 0.1, rush_td: 6,
+      rec: 1, rec_yd: 0.1, rec_td: 6,
+      idp_tkl_solo: 1.5, idp_tkl_ast: 0.75, idp_sack: 4, idp_int: 4,
+      fgm: 3, xpm: 1,
+    }),
+    limit: '600',
   });
   try {
     const r = await fetch(`${base}/projections?${q}`, { signal: AbortSignal.timeout(120000) });
