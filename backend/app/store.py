@@ -45,6 +45,11 @@ class CacheMeta:
     #: for - before kickoff the new season 404s, and the difference between
     #: the two is exactly what the UI has to disclose.
     seasons_loaded: list[int] | None = None
+    #: Latest regular-season week held per season, keyed by season as a string
+    #: (JSON object keys are strings). Computed once at refresh: season_status()
+    #: runs on every response, and re-reading the parquet there would put a
+    #: full table load on every request.
+    weeks_by_season: dict[str, int] | None = None
     row_counts: dict[str, int] | None = None
 
     @property
@@ -159,6 +164,13 @@ def refresh(seasons: list[int] | None = None) -> CacheMeta:
             df = pd.concat(frames, ignore_index=True)
             df.to_parquet(_parquet_path(name), index=False)
             row_counts[name] = len(df)
+            if name == "player_stats":
+                weeks: dict[str, int] = {}
+                d = df[df["season_type"] == "REG"] if "season_type" in df.columns else df
+                for yr, g in d.groupby("season"):
+                    w = g["week"].dropna()
+                    weeks[str(int(yr))] = int(w.max()) if len(w) else 0
+                meta.weeks_by_season = weeks
 
         pull_seasons("player_stats", lambda yr: nr.load_player_stats(seasons=[yr]))
         pull_seasons("snap_counts", lambda yr: nr.load_snap_counts(seasons=[yr]))
@@ -215,13 +227,8 @@ def season_status(served: int | None) -> dict:
             "status": "no-data",
             "note": "No season data is cached yet.",
         }
-    df = load_table("player_stats")
-    weeks = 0
-    if df is not None and not df.empty and "season" in df.columns:
-        d = df[(df["season"] == served)]
-        if "season_type" in d.columns:
-            d = d[d["season_type"] == "REG"]
-        weeks = int(d["week"].max()) if len(d) and d["week"].notna().any() else 0
+    # Read from the cached meta, never the parquet: this runs on every response.
+    weeks = int((read_meta().weeks_by_season or {}).get(str(served), 0))
 
     if served < current:
         return {
