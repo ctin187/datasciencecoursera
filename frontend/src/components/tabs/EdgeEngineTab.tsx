@@ -10,6 +10,7 @@ import { buildActionCenter } from '../../lib/actionCenter';
 import { Card, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { ChampionshipMeter } from '../ui/ChampionshipMeter';
+import { SeasonNotice } from '../ui/SeasonNotice';
 
 const STATUS_STYLE: Record<EdgeSignal['status'], string> = {
   edge: 'border-emerald-700/60 bg-emerald-950/20',
@@ -83,6 +84,9 @@ export function EdgeEngineTab({
 
   return (
     <div className="space-y-3">
+      {/* Several signals here compare VOR, so they inherit whatever season the
+          projection backend is serving. Say which one that is. */}
+      <SeasonNotice status={rosterHealth.result?.season_status} />
       {myTeamSim && (
         <ChampionshipMeter probabilityPct={myTeamSim.championshipProbability * 100} simulations={seasonSim.result!.simulations} />
       )}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { LeagueData } from '../../hooks/useLeagueData';
 import type { WaiverTargetsState } from '../../hooks/useWaiverTargets';
 import type { ProjectionPoolState } from '../../hooks/useProjectionPool';
@@ -8,6 +8,7 @@ import { extractFaabHistory, computeRateDistribution, suggestBid } from '../../l
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
+import { SeasonNotice } from '../ui/SeasonNotice';
 import { Meter } from '../ui/Meter';
 
 function fmt(n: number | null): string {
@@ -39,6 +40,13 @@ export function WaiverWireTab({
   pool: ProjectionPoolState;
   faab: SeasonTransactionsState;
 }) {
+  // Before the season starts, "best free agent" cannot mean last season's
+  // production - that is the same mistake the draft board made. Rank on
+  // Sleeper's forward-looking consensus by default in that window, and let
+  // last season's VOR be the deliberate alternative rather than the default.
+  const [rankBy, setRankBy] = useState<'consensus' | 'vor' | null>(null);
+  const sleeperRankOf = (id: string) => data.players[id]?.search_rank ?? Number.POSITIVE_INFINITY;
+
   const isFaabLeague = (data.league.settings.waiver_budget ?? 0) > 0;
   const myRoster = userId ? data.rosters.find((r) => r.owner_id === userId) : undefined;
   const myBudgetRemaining = myRoster ? (data.league.settings.waiver_budget ?? 0) - (myRoster.settings.waiver_budget_used ?? 0) : null;
@@ -102,6 +110,18 @@ export function WaiverWireTab({
 
   const { result } = waivers;
 
+  // Default follows the data: a completed prior season means VOR is history,
+  // so consensus leads until the current season has actually produced stats.
+  const effectiveRankBy = rankBy ?? (result.season_status?.is_current_season ? 'vor' : 'consensus');
+  // Sorted inline rather than in a useMemo: this sits BELOW the loading/error
+  // early returns, so a hook here would change the hook count between renders
+  // and throw "rendered more hooks than during the previous render" the moment
+  // the tab goes from loading to loaded. A few dozen rows cost nothing to sort.
+  const orderedTargets =
+    effectiveRankBy === 'consensus'
+      ? [...result.targets].sort((a, b) => sleeperRankOf(a.sleeper_id) - sleeperRankOf(b.sleeper_id))
+      : [...result.targets].sort((a, b) => (b.vor_per_game ?? -999) - (a.vor_per_game ?? -999));
+
   const columns: Column<WaiverTarget>[] = [
     { key: 'name', header: 'Player', accessor: (t) => t.name ?? t.sleeper_id, render: (t) => (
       <span>{t.name ?? t.sleeper_id} <span className="text-slate-500">({t.position ?? '?'}{t.team ? ` · ${t.team}` : ''})</span></span>
@@ -128,6 +148,18 @@ export function WaiverWireTab({
           {t.upgrade_over_weakest_starter != null ? `${t.upgrade_over_weakest_starter >= 0 ? '+' : ''}${fmt(t.upgrade_over_weakest_starter)}` : '—'}
         </span>
       ),
+    },
+    {
+      key: 'consensus',
+      header: 'Sleeper Rk',
+      accessor: (t) => sleeperRankOf(t.sleeper_id),
+      align: 'right',
+      render: (t) => {
+        const r = sleeperRankOf(t.sleeper_id);
+        return Number.isFinite(r)
+          ? <span className="num-accent" title="Sleeper's consensus for the season ahead - forward-looking, unlike VOR">#{r}</span>
+          : <span className="text-muted">—</span>;
+      },
     },
     { key: 'trend', header: 'Usage Trend', accessor: (t) => t.usage?.direction ?? '', align: 'center', render: (t) => directionBadge(t.usage?.direction ?? null) },
     ...(isFaabLeague && faabDistribution
@@ -157,14 +189,20 @@ export function WaiverWireTab({
     { key: 'status', header: 'Status', accessor: (b) => (b.below_replacement ? 1 : 0), align: 'center', render: (b) => (b.below_replacement ? <Badge color="red">Below replacement — drop candidate</Badge> : <Badge color="green">Roster-worthy</Badge>) },
   ];
 
-  const topTarget = result.targets[0];
+  // Follow whatever ordering is on screen. Headlining the VOR leader while
+  // the table is sorted by consensus would name a different player than the
+  // one at the top of the list the manager is reading.
+  const topTarget = orderedTargets[0];
 
   return (
     <div className="space-y-3">
+      <SeasonNotice status={result.season_status} />
       {topTarget && (
         <Card>
           <div className="min-w-0">
-            <div className="stat-label">Top Waiver Target</div>
+            <div className="stat-label">
+              Top Waiver Target · {effectiveRankBy === 'consensus' ? 'Sleeper consensus' : `${result.season} VOR`}
+            </div>
             <div className="num mt-0.5 truncate text-lg font-semibold text-slate-100">
               {topTarget.name ?? topTarget.sleeper_id}
             </div>
@@ -187,7 +225,31 @@ export function WaiverWireTab({
           Waiver Radar ({result.count})
         </CardTitle>
         <p className="mb-3 text-xs text-slate-500">{result.methodology}</p>
-        <DataTable rows={result.targets} columns={columns} rowKey={(t) => t.sleeper_id} defaultSortKey="vor" maxHeight={640} />
+        <div className="filter-bar">
+          <button
+            className={`filter-chip ${effectiveRankBy === 'consensus' ? 'is-active' : ''}`}
+            onClick={() => setRankBy('consensus')}
+            title="Sleeper's consensus for the season ahead"
+          >
+            Rank: Sleeper Consensus
+          </button>
+          <button
+            className={`filter-chip ${effectiveRankBy === 'vor' ? 'is-active' : ''}`}
+            onClick={() => setRankBy('vor')}
+            title={`Value over replacement from the ${result.season} season`}
+          >
+            Rank: {result.season} VOR
+          </button>
+        </div>
+
+        <DataTable
+          rows={orderedTargets}
+          columns={columns}
+          rowKey={(t) => t.sleeper_id}
+          defaultSortKey={effectiveRankBy === 'consensus' ? 'consensus' : 'vor'}
+          defaultSortDir={effectiveRankBy === 'consensus' ? 'asc' : 'desc'}
+          maxHeight={640}
+        />
         <p className="mt-3 text-xs text-slate-600">
           "Upgrade over your weakest starter" is a value comparison, not a bid amount.
           {isFaabLeague && !faabDistribution && ' Not enough historical FAAB bids in this league yet to suggest bid ranges.'}
