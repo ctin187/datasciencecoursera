@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSupplementalPool, buildFullFallbackPool, unprojectedPositions } from './supplementalPool';
 import { detectLeagueFormat } from './leagueFormat';
-import { buildAvailableBoard } from './draftAssistant';
 import type { PlayersMap } from '../types';
-import type { PooledPlayer } from '../hooks/useProjectionPool';
 
 function player(id: string, position: string, rank: number | null, over: Partial<Record<string, unknown>> = {}) {
   return {
@@ -119,55 +117,5 @@ describe('buildFullFallbackPool', () => {
     expect(pool.has('qb1')).toBe(true);
     expect(pool.has('rb1')).toBe(true);
     expect(pool.has('k1')).toBe(true);
-  });
-});
-
-describe('buildAvailableBoard keeps unprojected positions on the board', () => {
-  const pooled = new Map<string, PooledPlayer>([
-    ['rb1', { sleeperId: 'rb1', gsisId: 'g1', name: 'RB One', position: 'RB', team: 'NE', projectedPointsPerGame: 18, vorPerGame: 6, restOfSeasonPoints: 0, valueSource: 'backend-vor', sleeperRank: null }],
-    ['rb2', { sleeperId: 'rb2', gsisId: 'g2', name: 'RB Two', position: 'RB', team: 'NE', projectedPointsPerGame: 12, vorPerGame: 2, restOfSeasonPoints: 0, valueSource: 'backend-vor', sleeperRank: null }],
-    ['k1', { sleeperId: 'k1', gsisId: '', name: 'Kicker One', position: 'K', team: 'NE', projectedPointsPerGame: 0, vorPerGame: null, restOfSeasonPoints: 0, valueSource: 'sleeper-rank', sleeperRank: 150 }],
-    ['lb1', { sleeperId: 'lb1', gsisId: '', name: 'Backer One', position: 'LB', team: 'NE', projectedPointsPerGame: 0, vorPerGame: null, restOfSeasonPoints: 0, valueSource: 'sleeper-rank', sleeperRank: 90 }],
-  ]);
-
-  const board = buildAvailableBoard({
-    pool: pooled,
-    draftedSleeperIds: new Set(),
-    rosterPositions: IDP_LEAGUE,
-    myCurrentPlayerIds: [],
-  });
-
-  it('includes rank-only players instead of filtering them out (the original bug)', () => {
-    expect(board.map((r) => r.sleeperId).sort()).toEqual(['k1', 'lb1', 'rb1', 'rb2']);
-  });
-
-  it('sorts VOR-scored players ahead of rank-only ones', () => {
-    expect(board.slice(0, 2).map((r) => r.sleeperId)).toEqual(['rb1', 'rb2']);
-  });
-
-  it('orders rank-only players among themselves by Sleeper rank', () => {
-    expect(board.slice(2).map((r) => r.sleeperId)).toEqual(['lb1', 'k1']);
-  });
-
-  it('leaves VOR null for rank-only players rather than inventing one', () => {
-    expect(board.find((r) => r.sleeperId === 'k1')?.vorPerGame).toBeNull();
-  });
-
-  it('does not report a positional drop-off between two rank-only players', () => {
-    expect(board.find((r) => r.sleeperId === 'lb1')?.dropToNextAtPosition).toBeNull();
-  });
-
-  it('still computes drop-off between two genuinely projected players', () => {
-    expect(board.find((r) => r.sleeperId === 'rb1')?.dropToNextAtPosition).toBeCloseTo(4);
-  });
-
-  it('respects drafted players', () => {
-    const after = buildAvailableBoard({
-      pool: pooled,
-      draftedSleeperIds: new Set(['k1']),
-      rosterPositions: IDP_LEAGUE,
-      myCurrentPlayerIds: [],
-    });
-    expect(after.some((r) => r.sleeperId === 'k1')).toBe(false);
   });
 });

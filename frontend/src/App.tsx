@@ -199,7 +199,7 @@ export default function App() {
               />
             )}
             {tab === 'roster' && <RosterValueTab data={data} userId={activeUserId} health={rosterHealth} />}
-            {tab === 'draft' && <DraftAssistantTab data={data} userId={activeUserId} pool={projectionPool} draftPicks={draftPicks} />}
+            {tab === 'draft' && <DraftAssistantTab data={data} userId={activeUserId} draftPicks={draftPicks} />}
             {tab === 'trade' && <TradeAnalyzerTab data={data} health={rosterHealth} seasonSim={seasonSim} />}
             {tab === 'waivers' && (
               <WaiverWireTab data={data} userId={activeUserId} waivers={waiverTargets} pool={projectionPool} faab={seasonTransactions} />
@@ -217,8 +217,9 @@ export default function App() {
         {data && (
           <p className="mb-1 font-mono">Rosters loaded {new Date(data.rostersFetchedAt).toLocaleTimeString()}</p>
         )}
-        League, roster, and matchup data from the public Sleeper API. Projections and VOR from nflverse play-by-play
-        data via the project's own backend. No fabricated statistics — see each tab for source and methodology.
+        League, roster, matchup and draft-ranking data from the public Sleeper API. In-season projections and VOR
+        from nflverse play-by-play data via the project's own backend. No fabricated statistics — see each tab for
+        source and methodology.
       </footer>
     </div>
   );
