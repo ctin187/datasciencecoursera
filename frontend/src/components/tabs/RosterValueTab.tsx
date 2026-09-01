@@ -4,6 +4,7 @@ import type { StarterSlot, TeamReport, VorPlayer } from '../../services/backendA
 import { Card, CardTitle, StatTile } from '../ui/Card';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Badge } from '../ui/Badge';
+import { SeasonNotice } from '../ui/SeasonNotice';
 
 function fmt(n: number | null): string {
   return n === null ? '—' : n.toFixed(1);
@@ -128,6 +129,7 @@ export function RosterValueTab({ data, userId, health }: { data: LeagueData; use
 
   return (
     <div className="space-y-3">
+      <SeasonNotice status={result.season_status} />
       <Card>
         <CardTitle
           subtitle={`Season ${result.season}, as of week ${result.as_of_week} (latest cached: week ${result.latest_cached_week}). ${result.games_remaining} games remaining. Source: nflverse play-by-play + Sleeper roster data.`}

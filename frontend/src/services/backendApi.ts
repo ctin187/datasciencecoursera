@@ -10,6 +10,22 @@ export const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string
 
 export const isBackendConfigured = (): boolean => API_BASE_URL.length > 0;
 
+/**
+ * Which season the numbers in a response actually describe, relative to the
+ * one being played. Before a season kicks off nflverse has published nothing
+ * for it, so the backend serves the previous season - and this is how the UI
+ * knows to say so rather than passing last year's production off as a
+ * forecast.
+ */
+export interface SeasonStatus {
+  season: number | null;
+  current_season: number;
+  is_current_season: boolean;
+  weeks_played?: number;
+  status: 'prior-season-complete' | 'in-progress' | 'complete' | 'no-data';
+  note: string;
+}
+
 export interface Provenance {
   data_as_of: string | null;
   age_hours: number | null;
@@ -73,6 +89,7 @@ export interface ScoringAnalysis {
 export interface RosterHealthResponse {
   provenance: Provenance;
   season: number;
+  season_status?: SeasonStatus;
   as_of_week: number;
   latest_cached_week: number;
   games_remaining: number;
@@ -131,6 +148,7 @@ export interface BenchPlayer extends VorPlayer {
 export interface WaiverTargetsResponse {
   provenance: Provenance;
   season: number;
+  season_status?: SeasonStatus;
   as_of_week: number;
   games_remaining: number;
   scoring_analysis: ScoringAnalysis;
@@ -319,6 +337,7 @@ export interface ProjectedPlayer {
 export interface ProjectionsResponse {
   provenance: Provenance;
   season: number;
+  season_status?: SeasonStatus;
   as_of_week: number;
   latest_cached_week: number;
   games_remaining: number;

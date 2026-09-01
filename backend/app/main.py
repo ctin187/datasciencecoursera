@@ -157,7 +157,8 @@ def health() -> dict:
         "cached_tables": meta.row_counts or {},
         "seasons": meta.seasons,
         "config": {
-            "default_season": config.DEFAULT_SEASON,
+            "current_season": config.CURRENT_SEASON,
+            "seasons_available": store.seasons_available(),
             "refresh_interval_hours": config.REFRESH_INTERVAL_HOURS,
             "cors_origins": config.CORS_ORIGINS,
         },
@@ -183,12 +184,13 @@ STAT_FIELDS = [
 
 @app.get("/players/stats")
 def players_stats(
-    season: int = Query(default=config.DEFAULT_SEASON),
+    season: int | None = Query(default=None, description='Defaults to the newest season with cached data'),
     week: int | None = Query(default=None),
     position: str | None = Query(default=None),
     limit: int = Query(default=500, le=5000),
 ) -> dict:
     df = _require("player_stats")
+    season = store.resolve_season(season)
     d = df[(df["season"] == season) & (df["season_type"] == "REG")]
     if week is not None:
         d = d[d["week"] == week]
@@ -227,6 +229,7 @@ def players_stats(
     return {
         "provenance": store.provenance(),
         "season": season,
+        "season_status": store.season_status(season),
         "week": week,
         "count": len(out),
         "unavailable_fields": UNAVAILABLE_FIELDS,
@@ -244,9 +247,10 @@ TREND_METRICS = [
 def players_trends(
     player_ids: str = Query(..., description="Comma-separated GSIS or Sleeper IDs"),
     weeks: int = Query(default=4, ge=1, le=17),
-    season: int = Query(default=config.DEFAULT_SEASON),
+    season: int | None = Query(default=None, description='Defaults to the newest season with cached data'),
 ) -> dict:
     df = _require("player_stats")
+    season = store.resolve_season(season)
     requested = [p.strip() for p in player_ids.split(",") if p.strip()]
 
     resolved: dict[str, str] = {}
@@ -295,39 +299,49 @@ def players_trends(
     return {
         "provenance": store.provenance(),
         "season": season,
+        "season_status": store.season_status(season),
         "window_weeks": weeks,
         "unresolved_ids": unresolved,
         "players": results,
     }
 
 
-def _projection_inputs(season: int, as_of_week: int | None, scoring_settings: dict, fumble_scope: str):
+def _projection_inputs(season: int | None, as_of_week: int | None, scoring_settings: dict, fumble_scope: str):
+    """Resolves the season as well as building projections.
+
+    Season resolution lives here rather than in each endpoint so no caller can
+    forget it and silently fall back to a hardcoded year.
+    """
     df = _require("player_stats")
-    d = df[(df["season"] == season) & (df["season_type"] == "REG")]
+    resolved = store.resolve_season(season)
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="no season data cached yet")
+    d = df[(df["season"] == resolved) & (df["season_type"] == "REG")]
     if d.empty:
-        raise HTTPException(status_code=404, detail=f"no regular-season data cached for season {season}")
+        raise HTTPException(status_code=404, detail=f"no regular-season data cached for season {resolved}")
     max_week = int(d["week"].max())
     week = min(as_of_week, max_week) if as_of_week is not None else max_week
-    projs = projections.build_projections(df, season, week, scoring_settings, fumble_scope=fumble_scope)
-    return projs, week, max_week
+    projs = projections.build_projections(df, resolved, week, scoring_settings, fumble_scope=fumble_scope)
+    return projs, resolved, week, max_week
 
 
 @app.get("/projections")
 def get_projections(
-    season: int = Query(default=config.DEFAULT_SEASON),
+    season: int | None = Query(default=None, description='Defaults to the newest season with cached data'),
     week: int | None = Query(default=None, description="Project as of this week (default: latest cached)"),
     scoring_json: str | None = Query(default=None, alias="scoring"),
     fumble_scope: str = Query(default="all", pattern="^(all|offensive)$"),
     limit: int = Query(default=300, le=2000),
 ) -> dict:
     settings = _parse_scoring(scoring_json)
-    projs, as_of, max_week = _projection_inputs(season, week, settings, fumble_scope)
+    projs, season, as_of, max_week = _projection_inputs(season, week, settings, fumble_scope)
     games_left = max(0, config.REG_SEASON_WEEKS - as_of)
     ros = projections.rest_of_season(projs, as_of, config.REG_SEASON_WEEKS)
 
     return {
         "provenance": store.provenance(),
         "season": season,
+        "season_status": store.season_status(season),
         "as_of_week": as_of,
         "latest_cached_week": max_week,
         "games_remaining": games_left,
@@ -353,7 +367,7 @@ def get_projections(
 
 @app.get("/players/replacement-level")
 def replacement_level(
-    season: int = Query(default=config.DEFAULT_SEASON),
+    season: int | None = Query(default=None, description='Defaults to the newest season with cached data'),
     scoring_json: str | None = Query(default=None, alias="scoring"),
     roster_positions: str = Query(
         default="QB,RB,RB,WR,WR,WR,TE,FLEX,FLEX",
@@ -364,12 +378,13 @@ def replacement_level(
     fumble_scope: str = Query(default="all", pattern="^(all|offensive)$"),
 ) -> dict:
     settings = _parse_scoring(scoring_json)
-    projs, as_of, _ = _projection_inputs(season, week, settings, fumble_scope)
+    projs, season, as_of, _ = _projection_inputs(season, week, settings, fumble_scope)
     slots = [s.strip().upper() for s in roster_positions.split(",") if s.strip()]
     levels = vor.compute_replacement_levels(projs, slots, num_teams)
     return {
         "provenance": store.provenance(),
         "season": season,
+        "season_status": store.season_status(season),
         "as_of_week": as_of,
         "num_teams": num_teams,
         "roster_positions": slots,
@@ -430,9 +445,8 @@ def waiver_targets(req: WaiverTargetsRequest) -> dict:
     `unprojected` bucket rather than being ranked against real ones on a
     fabricated score.
     """
-    season = req.season or config.DEFAULT_SEASON
     settings = req.scoring_settings or scoring.DEFAULT_PPR
-    projs, as_of, max_week = _projection_inputs(season, req.week, settings, req.fumble_scope)
+    projs, season, as_of, max_week = _projection_inputs(req.season, req.week, settings, req.fumble_scope)
     levels = vor.compute_replacement_levels(projs, req.roster_positions, req.num_teams)
     games_left = max(0, config.REG_SEASON_WEEKS - as_of)
     vor_by_gsis = vor.compute_vor(projs, levels, games_left)
@@ -502,6 +516,7 @@ def waiver_targets(req: WaiverTargetsRequest) -> dict:
     return {
         "provenance": store.provenance(),
         "season": season,
+        "season_status": store.season_status(season),
         "as_of_week": as_of,
         "latest_cached_week": max_week,
         "games_remaining": games_left,
@@ -520,9 +535,8 @@ def waiver_targets(req: WaiverTargetsRequest) -> dict:
 
 @app.post("/roster-health")
 def roster_health(req: RosterHealthRequest) -> dict:
-    season = req.season or config.DEFAULT_SEASON
     settings = req.scoring_settings or scoring.DEFAULT_PPR
-    projs, as_of, max_week = _projection_inputs(season, req.week, settings, req.fumble_scope)
+    projs, season, as_of, max_week = _projection_inputs(req.season, req.week, settings, req.fumble_scope)
     levels = vor.compute_replacement_levels(projs, req.roster_positions, req.num_teams)
     games_left = max(0, config.REG_SEASON_WEEKS - as_of)
     vor_by_gsis = vor.compute_vor(projs, levels, games_left)
@@ -627,6 +641,7 @@ def roster_health(req: RosterHealthRequest) -> dict:
     return {
         "provenance": store.provenance(),
         "season": season,
+        "season_status": store.season_status(season),
         "as_of_week": as_of,
         "latest_cached_week": max_week,
         "games_remaining": games_left,

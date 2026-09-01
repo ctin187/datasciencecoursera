@@ -41,6 +41,10 @@ class CacheMeta:
     last_attempt_utc: str | None = None
     last_error: str | None = None
     seasons: list[int] | None = None
+    #: Seasons that actually produced rows. `seasons` is only what we asked
+    #: for - before kickoff the new season 404s, and the difference between
+    #: the two is exactly what the UI has to disclose.
+    seasons_loaded: list[int] | None = None
     row_counts: dict[str, int] | None = None
 
     @property
@@ -128,19 +132,113 @@ def refresh(seasons: list[int] | None = None) -> CacheMeta:
                 errors.append(msg)
                 log.error("refresh failed for %s", msg)
 
-        pull("player_stats", lambda: nr.load_player_stats(seasons=seasons))
-        pull("snap_counts", lambda: nr.load_snap_counts(seasons=seasons))
+        # Seasons are pulled one at a time on purpose. Before a season kicks
+        # off nflverse has not published its asset yet and the request 404s;
+        # asking for [2026, 2025] in one call loses 2025 too. Per-season means
+        # a missing current season costs only that season.
+        loaded: set[int] = set()
+
+        def pull_seasons(name: str, fn) -> None:
+            frames: list[pd.DataFrame] = []
+            for yr in seasons:
+                try:
+                    df = _to_pandas(fn(yr))
+                    if len(df):
+                        frames.append(df)
+                        loaded.add(yr)
+                        log.info("refreshed %s %d: %d rows", name, yr, len(df))
+                except Exception as exc:
+                    # A 404 for a season that has not started is expected, not
+                    # a fault; record it without treating the pull as failed.
+                    log.info("%s %d unavailable: %s", name, yr, type(exc).__name__)
+            if not frames:
+                msg = f"{name}: no season returned data ({seasons})"
+                errors.append(msg)
+                log.error(msg)
+                return
+            df = pd.concat(frames, ignore_index=True)
+            df.to_parquet(_parquet_path(name), index=False)
+            row_counts[name] = len(df)
+
+        pull_seasons("player_stats", lambda yr: nr.load_player_stats(seasons=[yr]))
+        pull_seasons("snap_counts", lambda yr: nr.load_snap_counts(seasons=[yr]))
         pull("players", lambda: nr.load_players())
         pull("id_map", _load_id_map_raw)
 
         meta.row_counts = row_counts
         meta.seasons = seasons
+        meta.seasons_loaded = sorted(loaded)
         meta.last_error = "; ".join(errors) if errors else None
         # Only stamp success if the table everything else depends on landed.
         if "player_stats" in row_counts:
             meta.last_success_utc = datetime.now(timezone.utc).isoformat()
         _write_meta(meta)
         return meta
+
+
+def seasons_available() -> list[int]:
+    """Seasons with regular-season rows actually on disk, newest last."""
+    meta = read_meta()
+    if meta.seasons_loaded:
+        return list(meta.seasons_loaded)
+    df = load_table("player_stats")
+    if df is None or df.empty or "season" not in df.columns:
+        return []
+    return sorted(int(s) for s in df["season"].dropna().unique())
+
+
+def resolve_season(requested: int | None = None) -> int | None:
+    """Which season to actually serve.
+
+    An explicit request wins if we hold that season. Otherwise the newest
+    season on disk - which before kickoff is LAST season, and callers are
+    expected to surface that via season_status().
+    """
+    have = seasons_available()
+    if not have:
+        return None
+    if requested is not None and requested in have:
+        return requested
+    return max(have)
+
+
+def season_status(served: int | None) -> dict:
+    """Describes the served season relative to the one being played.
+
+    This is the field that stops a completed season's numbers from being read
+    as a forecast for the season about to start.
+    """
+    current = config.CURRENT_SEASON
+    if served is None:
+        return {
+            "season": None, "current_season": current, "is_current_season": False,
+            "status": "no-data",
+            "note": "No season data is cached yet.",
+        }
+    df = load_table("player_stats")
+    weeks = 0
+    if df is not None and not df.empty and "season" in df.columns:
+        d = df[(df["season"] == served)]
+        if "season_type" in d.columns:
+            d = d[d["season_type"] == "REG"]
+        weeks = int(d["week"].max()) if len(d) and d["week"].notna().any() else 0
+
+    if served < current:
+        return {
+            "season": served, "current_season": current, "is_current_season": False,
+            "weeks_played": weeks, "status": "prior-season-complete",
+            "note": (
+                f"The {current} season has not published stats yet, so these numbers describe "
+                f"{served} production. Use them to judge what players have done, not to "
+                f"forecast {current}."
+            ),
+        }
+    return {
+        "season": served, "current_season": current, "is_current_season": True,
+        "weeks_played": weeks,
+        "status": "in-progress" if weeks < config.REG_SEASON_WEEKS else "complete",
+        "note": f"{served} data through week {weeks}.",
+    }
 
 
 def _load_id_map_raw() -> pd.DataFrame:

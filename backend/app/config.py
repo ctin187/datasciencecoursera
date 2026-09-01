@@ -6,6 +6,7 @@ on Railway/Render without code changes.
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -16,26 +17,45 @@ from pathlib import Path
 # if you want the cache to survive restarts; otherwise it rebuilds on boot.
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data_cache")).resolve()
 
+def current_nfl_season(today: date | None = None) -> int:
+    """The season label the NFL is currently in.
+
+    Seasons are named for the year they kick off, and run September to early
+    February. So anything from September onward belongs to that calendar year;
+    January and February still belong to the season that began the previous
+    year. Getting this wrong is not cosmetic - it is the difference between
+    ranking players on what they are expected to do and on what they already
+    did.
+    """
+    d = today or date.today()
+    return d.year if d.month >= 9 else d.year - 1
+
+
+CURRENT_SEASON: int = int(os.getenv("CURRENT_SEASON", current_nfl_season()))
+
+
 # Seasons to ingest.
 #
-# One by default, deliberately. An earlier version pulled two "to give the
-# projection model prior-year context" - but that was never implemented: every
-# query in projections.py, usage.py and main.py scopes to a single season, so
-# the extra season was downloaded, parsed and held in memory without ever being
-# read. On Render's 512MB free tier that waste is the difference between
-# comfortable and OOM.
+# The current season first, with the one before it as a fallback: before
+# kickoff, and in the days after it, nflverse has not published the new
+# season's stats yet and its asset 404s. Ingesting the previous season means
+# the app still has something to say - but it must then say WHICH season the
+# numbers come from, which is why `season_status` below exists.
 #
-# Set SEASONS="2024,2025" if you add genuine cross-season logic later.
+# One season is held in memory at a time. An earlier version pulled two "for
+# prior-year context" that nothing ever read; on Render's 512MB free tier that
+# waste is the difference between comfortable and OOM.
 def _parse_seasons() -> list[int]:
     raw = os.getenv("SEASONS")
     if raw:
         return [int(s.strip()) for s in raw.split(",") if s.strip()]
-    return [2025]
+    return [CURRENT_SEASON, CURRENT_SEASON - 1]
 
 
 SEASONS: list[int] = _parse_seasons()
 
-# The season the API serves by default. Must be present in SEASONS.
+# The season the API serves by default. Overridden at runtime by whichever
+# season actually has cached data - see store.resolve_season().
 DEFAULT_SEASON: int = int(os.getenv("DEFAULT_SEASON", max(SEASONS)))
 
 # Regular-season week count. nflverse weeks 19-22 are playoffs, which fantasy
